@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
+
+export const dynamic = 'force-dynamic'
 import { sendEmail, passwordResetEmail } from '@/lib/email'
 import { ok, err } from '@/lib/utils'
 

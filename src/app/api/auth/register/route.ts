@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server'
 import { hash } from 'bcryptjs'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
+
+export const dynamic = 'force-dynamic'
 import { ok, err } from '@/lib/utils'
 
 const RegisterSchema = z.object({
