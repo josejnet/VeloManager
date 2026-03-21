@@ -12,13 +12,14 @@ interface Notification {
   link?: string
 }
 
-export function NotificationBell({ clubId }: { clubId: string }) {
+export function NotificationBell({ clubId }: { clubId?: string }) {
   const [open, setOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
 
   const fetchNotifications = async () => {
+    if (!clubId) return
     const res = await fetch(`/api/notifications?clubId=${clubId}&pageSize=10`)
     if (res.ok) {
       const data = await res.json()

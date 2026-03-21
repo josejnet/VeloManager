@@ -4,7 +4,7 @@ import { NotificationBell } from '@/components/notifications/NotificationBell'
 
 interface HeaderProps {
   title: string
-  clubId: string
+  clubId?: string
 }
 
 export function Header({ title, clubId }: HeaderProps) {
