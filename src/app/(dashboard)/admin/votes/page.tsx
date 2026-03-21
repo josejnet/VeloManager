@@ -24,6 +24,8 @@ export default function VotesPage() {
   const [page, setPage] = useState(1)
   const [modal, setModal] = useState(false)
   const [resultModal, setResultModal] = useState<any>(null)
+  const [confirmClose, setConfirmClose] = useState<{ open: boolean; voteId: string; title: string }>({ open: false, voteId: '', title: '' })
+  const [closingId, setClosingId] = useState<string | null>(null)
   const [form, setForm] = useState({ title: '', description: '', options: ['', ''] })
 
   useEffect(() => {
@@ -51,8 +53,10 @@ export default function VotesPage() {
   }
 
   const closeVote = async (voteId: string) => {
+    setClosingId(voteId)
     const res = await fetch(`/api/clubs/${clubId}/votes/${voteId}`, { method: 'PATCH' })
-    if (res.ok) { toast.success('Votación cerrada'); fetch_() }
+    setClosingId(null)
+    if (res.ok) { toast.success('Votación cerrada'); setConfirmClose({ open: false, voteId: '', title: '' }); fetch_() }
     else toast.error('Error al cerrar')
   }
 
@@ -107,8 +111,13 @@ export default function VotesPage() {
                           <BarChart2 className="h-3 w-3" /> Gráfico
                         </Button>
                         {vote.active && (
-                          <Button size="sm" variant="danger" onClick={() => closeVote(vote.id)}>
-                            <Square className="h-3 w-3" /> Cerrar
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            disabled={closingId === vote.id}
+                            onClick={() => setConfirmClose({ open: true, voteId: vote.id, title: vote.title })}
+                          >
+                            <Square className="h-3 w-3" /> {closingId === vote.id ? 'Cerrando...' : 'Cerrar'}
                           </Button>
                         )}
                       </div>
@@ -149,6 +158,24 @@ export default function VotesPage() {
           <div className="flex gap-2 pt-2">
             <Button className="flex-1" onClick={create}>Crear votación</Button>
             <Button variant="outline" className="flex-1" onClick={() => setModal(false)}>Cancelar</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Confirm close vote modal */}
+      <Modal open={confirmClose.open} onClose={() => setConfirmClose({ open: false, voteId: '', title: '' })} title="Cerrar votación" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            ¿Seguro que quieres cerrar la votación <span className="font-semibold">"{confirmClose.title}"</span>?
+            Esta acción es irreversible y los socios no podrán votar más.
+          </p>
+          <div className="flex gap-2">
+            <Button className="flex-1" variant="danger" disabled={closingId === confirmClose.voteId} onClick={() => closeVote(confirmClose.voteId)}>
+              {closingId === confirmClose.voteId ? 'Cerrando...' : 'Sí, cerrar votación'}
+            </Button>
+            <Button className="flex-1" variant="outline" onClick={() => setConfirmClose({ open: false, voteId: '', title: '' })}>
+              Cancelar
+            </Button>
           </div>
         </div>
       </Modal>

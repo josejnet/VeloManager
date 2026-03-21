@@ -29,6 +29,21 @@ export default function SocioPurchasesPage() {
   const [cart, setCart] = useState<CartItem[]>([])
   const [cartOpen, setCartOpen] = useState(false)
   const [tab, setTab] = useState<'open' | 'orders'>('open')
+  const [placingOrder, setPlacingOrder] = useState(false)
+
+  // Persist cart to localStorage to survive page reloads
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const saved = localStorage.getItem('velo_cart')
+    if (saved) {
+      try { setCart(JSON.parse(saved)) } catch { /* ignore corrupt data */ }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem('velo_cart', JSON.stringify(cart))
+  }, [cart])
 
   useEffect(() => {
     if (!session?.user) return
@@ -49,32 +64,38 @@ export default function SocioPurchasesPage() {
 
   const fetchMyOrders = useCallback(async () => {
     if (!clubId) return
-    // Fetch from all windows
+    // Fetch all windows then retrieve current user's orders from each.
+    // The orders endpoint now correctly filters by userId for SOCIOs.
     const wRes = await fetch(`/api/clubs/${clubId}/purchases/windows?pageSize=50`)
     if (!wRes.ok) return
-    const { data: allWindows } = await wRes.json()
-    const orders: any[] = []
-    for (const w of allWindows) {
-      const oRes = await fetch(`/api/clubs/${clubId}/purchases/windows/${w.id}/orders`)
-      if (oRes.ok) {
-        const d = await oRes.json()
-        orders.push(...(d.data ?? []).map((o: any) => ({ ...o, windowName: w.name })))
-      }
-    }
+    const wData = await wRes.json()
+    const allWindows: any[] = wData.data ?? []
+    // Fetch orders in parallel instead of sequentially for better performance
+    const results = await Promise.allSettled(
+      allWindows.map((w) =>
+        fetch(`/api/clubs/${clubId}/purchases/windows/${w.id}/orders`)
+          .then((r) => r.ok ? r.json() : { data: [] })
+          .then((d) => (d.data ?? []).map((o: any) => ({ ...o, windowName: w.name })))
+          .catch(() => [])
+      )
+    )
+    const orders = results.flatMap((r) => r.status === 'fulfilled' ? r.value : [])
     setMyOrders(orders)
   }, [clubId])
 
   useEffect(() => { fetchData(); fetchMyOrders() }, [fetchData, fetchMyOrders])
 
   const addToCart = (product: any) => {
-    const existing = cart.find((c) => c.productId === product.id && c.size === '')
+    const defaultSize = product.availableSizes?.[0] ?? ''
+    // Match by productId AND the default size to avoid merging items with different sizes
+    const existing = cart.find((c) => c.productId === product.id && c.size === defaultSize)
     if (existing) {
-      setCart(cart.map((c) => c.productId === product.id ? { ...c, quantity: c.quantity + 1 } : c))
+      setCart(cart.map((c) => c.productId === product.id && c.size === defaultSize ? { ...c, quantity: c.quantity + 1 } : c))
     } else {
       setCart([...cart, {
         productId: product.id,
         productName: product.name,
-        size: product.availableSizes?.[0] ?? '',
+        size: defaultSize,
         quantity: 1,
         price: Number(product.price),
         availableSizes: product.availableSizes ?? [],
@@ -101,13 +122,16 @@ export default function SocioPurchasesPage() {
     for (const item of cart) {
       if (!item.size) return toast.error(`Selecciona una talla para ${item.productName}`)
     }
+    setPlacingOrder(true)
     const res = await fetch(`/api/clubs/${clubId}/purchases/windows/${selectedWindow.id}/orders`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items: cart.map(({ productId, size, quantity }) => ({ productId, size, quantity })) }),
     })
+    setPlacingOrder(false)
     if (res.ok) {
       toast.success('Pedido confirmado')
       setCart([])
+      localStorage.removeItem('velo_cart')
       setCartOpen(false)
       fetchMyOrders()
     } else {
@@ -270,10 +294,10 @@ export default function SocioPurchasesPage() {
             )}
 
             <div className="flex gap-2 pt-2">
-              <Button className="flex-1" disabled={cart.length === 0} onClick={placeOrder}>
-                <ShoppingCart className="h-4 w-4" /> Confirmar pedido
+              <Button className="flex-1" disabled={cart.length === 0 || placingOrder} onClick={placeOrder}>
+                <ShoppingCart className="h-4 w-4" /> {placingOrder ? 'Confirmando...' : 'Confirmar pedido'}
               </Button>
-              <Button variant="outline" className="flex-1" onClick={() => setCartOpen(false)}>Cancelar</Button>
+              <Button variant="outline" className="flex-1" disabled={placingOrder} onClick={() => setCartOpen(false)}>Cancelar</Button>
             </div>
           </div>
         )}

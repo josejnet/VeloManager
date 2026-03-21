@@ -430,7 +430,10 @@ export default function SocioEventsPage() {
                               )}
                               <span className="flex items-center gap-1">
                                 <Users className="h-3 w-3" />
-                                {ev._count.attendees} asistente(s)
+                                {ev.attendees.filter((a) => a.status === 'GOING').length} confirmado(s)
+                                {ev._count.attendees > ev.attendees.filter((a) => a.status === 'GOING').length
+                                  ? ` · ${ev._count.attendees} respuestas`
+                                  : ''}
                                 {ev.maxAttendees ? ` / ${ev.maxAttendees} máx` : ''}
                               </span>
                             </div>
@@ -487,7 +490,10 @@ export default function SocioEventsPage() {
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-gray-400 shrink-0" />
                 <span>
-                  {selectedEvent._count.attendees} asistente(s)
+                  {selectedEvent.attendees.filter((a) => a.status === 'GOING').length} confirmado(s)
+                  {selectedEvent._count.attendees > selectedEvent.attendees.filter((a) => a.status === 'GOING').length
+                    ? ` · ${selectedEvent._count.attendees} respuestas`
+                    : ''}
                   {selectedEvent.maxAttendees ? ` / ${selectedEvent.maxAttendees} máx` : ''}
                 </span>
               </div>

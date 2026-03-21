@@ -22,6 +22,8 @@ export default function MembersPage() {
   const [loading, setLoading] = useState(false)
   const [quotaModal, setQuotaModal] = useState<{ open: boolean; membershipId: string; memberName: string }>({ open: false, membershipId: '', memberName: '' })
   const [quotaForm, setQuotaForm] = useState({ year: new Date().getFullYear(), amount: '' })
+  const [confirmAction, setConfirmAction] = useState<{ open: boolean; memberId: string; memberName: string; newStatus: string } | null>(null)
+  const [updatingId, setUpdatingId] = useState<string | null>(null)
 
   // Get clubId from membership
   useEffect(() => {
@@ -42,12 +44,14 @@ export default function MembersPage() {
   useEffect(() => { fetchMembers() }, [fetchMembers])
 
   const updateStatus = async (memberId: string, newStatus: string) => {
+    setUpdatingId(memberId)
     const res = await fetch(`/api/clubs/${clubId}/members/${memberId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus }),
     })
-    if (res.ok) { toast.success('Estado actualizado'); fetchMembers() }
+    setUpdatingId(null)
+    if (res.ok) { toast.success('Estado actualizado'); setConfirmAction(null); fetchMembers() }
     else toast.error('Error al actualizar')
   }
 
@@ -129,10 +133,10 @@ export default function MembersPage() {
                         <div className="flex justify-end gap-1">
                           {m.status === 'PENDING' && (
                             <>
-                              <Button size="sm" variant="primary" onClick={() => updateStatus(m.id, 'APPROVED')}>
-                                <Check className="h-3 w-3" /> Aprobar
+                              <Button size="sm" variant="primary" disabled={updatingId === m.id} onClick={() => updateStatus(m.id, 'APPROVED')}>
+                                <Check className="h-3 w-3" /> {updatingId === m.id ? '...' : 'Aprobar'}
                               </Button>
-                              <Button size="sm" variant="danger" onClick={() => updateStatus(m.id, 'REJECTED')}>
+                              <Button size="sm" variant="danger" disabled={updatingId === m.id} onClick={() => setConfirmAction({ open: true, memberId: m.id, memberName: m.user.name, newStatus: 'REJECTED' })}>
                                 <X className="h-3 w-3" /> Rechazar
                               </Button>
                             </>
@@ -146,14 +150,14 @@ export default function MembersPage() {
                               >
                                 <Plus className="h-3 w-3" /> Cuota
                               </Button>
-                              <Button size="sm" variant="ghost" onClick={() => updateStatus(m.id, 'SUSPENDED')}>
+                              <Button size="sm" variant="ghost" disabled={updatingId === m.id} onClick={() => setConfirmAction({ open: true, memberId: m.id, memberName: m.user.name, newStatus: 'SUSPENDED' })}>
                                 Suspender
                               </Button>
                             </>
                           )}
                           {m.status === 'SUSPENDED' && (
-                            <Button size="sm" variant="primary" onClick={() => updateStatus(m.id, 'APPROVED')}>
-                              Reactivar
+                            <Button size="sm" variant="primary" disabled={updatingId === m.id} onClick={() => updateStatus(m.id, 'APPROVED')}>
+                              {updatingId === m.id ? '...' : 'Reactivar'}
                             </Button>
                           )}
                         </div>
@@ -173,6 +177,26 @@ export default function MembersPage() {
           )}
         </Card>
       </main>
+
+      {/* Confirm destructive action modal */}
+      {confirmAction && (
+        <Modal open={confirmAction.open} onClose={() => setConfirmAction(null)} title={confirmAction.newStatus === 'REJECTED' ? 'Rechazar solicitud' : 'Suspender socio'} size="sm">
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              {confirmAction.newStatus === 'REJECTED'
+                ? <>¿Seguro que quieres <span className="font-semibold text-red-600">rechazar</span> la solicitud de <span className="font-semibold">{confirmAction.memberName}</span>?</>
+                : <>¿Seguro que quieres <span className="font-semibold text-orange-600">suspender</span> a <span className="font-semibold">{confirmAction.memberName}</span>? No podrá acceder al club hasta que sea reactivado.</>
+              }
+            </p>
+            <div className="flex gap-2">
+              <Button className="flex-1" variant="danger" disabled={updatingId === confirmAction.memberId} onClick={() => updateStatus(confirmAction.memberId, confirmAction.newStatus)}>
+                {updatingId === confirmAction.memberId ? 'Procesando...' : confirmAction.newStatus === 'REJECTED' ? 'Sí, rechazar' : 'Sí, suspender'}
+              </Button>
+              <Button className="flex-1" variant="outline" onClick={() => setConfirmAction(null)}>Cancelar</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       <Modal
         open={quotaModal.open}

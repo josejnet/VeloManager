@@ -56,6 +56,8 @@ function WindowsPanel({ clubId }: { clubId: string }) {
   const [form, setForm] = useState({ name: '', productIds: [] as string[] })
   const [exportData, setExportData] = useState<any>(null)
   const [exportModal, setExportModal] = useState(false)
+  const [confirmToggle, setConfirmToggle] = useState<{ open: boolean; windowId: string; name: string; current: string } | null>(null)
+  const [togglingId, setTogglingId] = useState<string | null>(null)
 
   const fetch_ = useCallback(async () => {
     const res = await fetch(`/api/clubs/${clubId}/purchases/windows?page=${page}`)
@@ -79,11 +81,16 @@ function WindowsPanel({ clubId }: { clubId: string }) {
 
   const toggleStatus = async (windowId: string, current: string) => {
     const status = current === 'OPEN' ? 'CLOSED' : 'OPEN'
+    setTogglingId(windowId)
     const res = await fetch(`/api/clubs/${clubId}/purchases/windows/${windowId}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }),
     })
-    if (res.ok) { toast.success(status === 'OPEN' ? 'Campaña abierta' : 'Campaña cerrada'); fetch_() }
-    else { const d = await res.json(); toast.error(d.error ?? 'Error') }
+    setTogglingId(null)
+    if (res.ok) {
+      toast.success(status === 'OPEN' ? 'Campaña abierta' : 'Campaña cerrada')
+      setConfirmToggle(null)
+      fetch_()
+    } else { const d = await res.json(); toast.error(d.error ?? 'Error') }
   }
 
   const exportReport = async (windowId: string) => {
@@ -116,7 +123,12 @@ function WindowsPanel({ clubId }: { clubId: string }) {
                 </div>
                 <div className="flex gap-2">
                   {w.status !== 'CLOSED' && (
-                    <Button size="sm" variant={w.status === 'OPEN' ? 'danger' : 'primary'} onClick={() => toggleStatus(w.id, w.status)}>
+                    <Button
+                      size="sm"
+                      variant={w.status === 'OPEN' ? 'danger' : 'primary'}
+                      disabled={togglingId === w.id}
+                      onClick={() => setConfirmToggle({ open: true, windowId: w.id, name: w.name, current: w.status })}
+                    >
                       {w.status === 'OPEN' ? <><Square className="h-3 w-3" /> Cerrar</> : <><Play className="h-3 w-3" /> Abrir</>}
                     </Button>
                   )}
@@ -130,6 +142,31 @@ function WindowsPanel({ clubId }: { clubId: string }) {
           </div>
         )}
       </Card>
+
+      {/* Confirm toggle status modal */}
+      {confirmToggle && (
+        <Modal open={confirmToggle.open} onClose={() => setConfirmToggle(null)} title={confirmToggle.current === 'OPEN' ? 'Cerrar campaña' : 'Abrir campaña'} size="sm">
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              {confirmToggle.current === 'OPEN'
+                ? <>¿Seguro que quieres <span className="font-semibold text-red-600">cerrar</span> la campaña <span className="font-semibold">"{confirmToggle.name}"</span>? Los socios no podrán hacer más pedidos.</>
+                : <>¿Quieres <span className="font-semibold text-green-600">abrir</span> la campaña <span className="font-semibold">"{confirmToggle.name}"</span>? Los socios podrán empezar a hacer pedidos.</>
+              }
+            </p>
+            <div className="flex gap-2">
+              <Button
+                className="flex-1"
+                variant={confirmToggle.current === 'OPEN' ? 'danger' : 'primary'}
+                disabled={togglingId === confirmToggle.windowId}
+                onClick={() => toggleStatus(confirmToggle.windowId, confirmToggle.current)}
+              >
+                {togglingId === confirmToggle.windowId ? 'Procesando...' : confirmToggle.current === 'OPEN' ? 'Sí, cerrar' : 'Sí, abrir'}
+              </Button>
+              <Button className="flex-1" variant="outline" onClick={() => setConfirmToggle(null)}>Cancelar</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Create modal */}
       <Modal open={modal} onClose={() => setModal(false)} title="Nueva campaña" size="md">

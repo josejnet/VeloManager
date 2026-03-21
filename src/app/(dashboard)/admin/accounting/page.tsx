@@ -195,6 +195,8 @@ function InvoicesPanel({ clubId }: { clubId: string }) {
   const [filter, setFilter] = useState('false') // pending by default
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState({ amount: '', description: '', supplier: '', fileUrl: '', date: new Date().toISOString().slice(0, 10) })
+  const [confirmApprove, setConfirmApprove] = useState<{ open: boolean; invoiceId: string; supplier: string; amount: number } | null>(null)
+  const [approvingId, setApprovingId] = useState<string | null>(null)
 
   const fetch_ = useCallback(async () => {
     const res = await fetch(`/api/clubs/${clubId}/accounting/invoices?page=${page}&approved=${filter}`)
@@ -204,8 +206,10 @@ function InvoicesPanel({ clubId }: { clubId: string }) {
   useEffect(() => { fetch_() }, [fetch_])
 
   const approve = async (invoiceId: string) => {
+    setApprovingId(invoiceId)
     const res = await fetch(`/api/clubs/${clubId}/accounting/invoices/${invoiceId}`, { method: 'POST' })
-    if (res.ok) { toast.success('Factura aprobada — saldo actualizado'); fetch_() }
+    setApprovingId(null)
+    if (res.ok) { toast.success('Factura aprobada — saldo actualizado'); setConfirmApprove(null); fetch_() }
     else { const d = await res.json(); toast.error(d.error ?? 'Error') }
   }
 
@@ -256,7 +260,7 @@ function InvoicesPanel({ clubId }: { clubId: string }) {
                   <td className="py-3 text-right font-semibold">{fmtCurrency(inv.amount)}</td>
                   <td className="py-3 text-right">
                     {!inv.approved ? (
-                      <Button size="sm" variant="primary" onClick={() => approve(inv.id)}>
+                      <Button size="sm" variant="primary" disabled={approvingId === inv.id} onClick={() => setConfirmApprove({ open: true, invoiceId: inv.id, supplier: inv.supplier, amount: inv.amount })}>
                         <Check className="h-3 w-3" /> Aprobar
                       </Button>
                     ) : (
@@ -269,6 +273,24 @@ function InvoicesPanel({ clubId }: { clubId: string }) {
           </table>
           {data && <Pagination page={data.page} totalPages={data.totalPages} total={data.total} pageSize={data.pageSize} onPageChange={setPage} />}
         </>
+      )}
+
+      {/* Confirm approve invoice modal */}
+      {confirmApprove && (
+        <Modal open={confirmApprove.open} onClose={() => setConfirmApprove(null)} title="Aprobar factura" size="sm">
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              ¿Confirmas la aprobación de la factura de <span className="font-semibold">{confirmApprove.supplier}</span> por <span className="font-semibold">{fmtCurrency(confirmApprove.amount)}</span>?
+              El importe se descontará del saldo del club automáticamente.
+            </p>
+            <div className="flex gap-2">
+              <Button className="flex-1" variant="primary" disabled={approvingId === confirmApprove.invoiceId} onClick={() => approve(confirmApprove.invoiceId)}>
+                {approvingId === confirmApprove.invoiceId ? 'Aprobando...' : 'Sí, aprobar factura'}
+              </Button>
+              <Button className="flex-1" variant="outline" onClick={() => setConfirmApprove(null)}>Cancelar</Button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       <Modal open={modal} onClose={() => setModal(false)} title="Registrar factura" size="sm">
@@ -293,6 +315,7 @@ function InvoicesPanel({ clubId }: { clubId: string }) {
 function QuotasPanel({ clubId }: { clubId: string }) {
   const [data, setData] = useState<any>(null)
   const [page, setPage] = useState(1)
+  const [payingId, setPayingId] = useState<string | null>(null)
 
   const fetch_ = useCallback(async () => {
     const res = await fetch(`/api/clubs/${clubId}/accounting/quotas?page=${page}`)
@@ -302,9 +325,11 @@ function QuotasPanel({ clubId }: { clubId: string }) {
   useEffect(() => { fetch_() }, [fetch_])
 
   const markPaid = async (quotaId: string) => {
+    setPayingId(quotaId)
     const res = await fetch(`/api/clubs/${clubId}/accounting/quotas`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quotaId }),
     })
+    setPayingId(null)
     if (res.ok) { toast.success('Cuota marcada como pagada — saldo actualizado'); fetch_() }
     else { const d = await res.json(); toast.error(d.error ?? 'Error') }
   }
@@ -340,8 +365,8 @@ function QuotasPanel({ clubId }: { clubId: string }) {
                   </td>
                   <td className="py-3 text-right">
                     {q.status !== 'PAID' && (
-                      <Button size="sm" onClick={() => markPaid(q.id)}>
-                        <Check className="h-3 w-3" /> Marcar pagada
+                      <Button size="sm" disabled={payingId === q.id} onClick={() => markPaid(q.id)}>
+                        <Check className="h-3 w-3" /> {payingId === q.id ? 'Procesando...' : 'Marcar pagada'}
                       </Button>
                     )}
                   </td>

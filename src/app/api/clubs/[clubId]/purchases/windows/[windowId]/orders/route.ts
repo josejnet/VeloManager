@@ -7,25 +7,32 @@ import { ok, err, getPaginationParams, buildPaginatedResponse } from '@/lib/util
 
 const CartItemSchema = z.object({
   productId: z.string(),
-  size: z.string(),
-  quantity: z.number().int().positive(),
+  size: z.string().min(1, 'La talla es obligatoria'),
+  quantity: z.number().int().min(1).max(100, 'La cantidad no puede superar 100 unidades por producto'),
 })
 
 const PlaceOrderSchema = z.object({
   items: z.array(CartItemSchema).min(1),
 })
 
-// GET /api/clubs/[clubId]/purchases/windows/[windowId]/orders — admin view
+// GET /api/clubs/[clubId]/purchases/windows/[windowId]/orders
+// — CLUB_ADMIN sees all orders; SOCIO sees only their own
 export async function GET(
   req: NextRequest,
   { params }: { params: { clubId: string; windowId: string } }
 ) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId) // SOCIO minimum
   if (!access.ok) return access.response
 
   const { page, pageSize, skip, take } = getPaginationParams(req.nextUrl.searchParams)
 
-  const where = { purchaseWindowId: params.windowId, clubId: params.clubId }
+  // SOCIOs can only see their own orders
+  const isAdmin = access.role === 'CLUB_ADMIN' || access.role === 'SUPER_ADMIN'
+  const where = {
+    purchaseWindowId: params.windowId,
+    clubId: params.clubId,
+    ...(isAdmin ? {} : { userId: access.userId }),
+  }
 
   const [orders, total] = await Promise.all([
     prisma.order.findMany({
@@ -80,33 +87,34 @@ export async function POST(
     0
   )
 
-  // Cancel any existing pending order for this user in this window
-  const existing = await prisma.order.findFirst({
-    where: { userId: access.userId, purchaseWindowId: params.windowId, status: 'PENDING' },
-  })
-  if (existing) {
-    await prisma.order.update({ where: { id: existing.id }, data: { status: 'CANCELLED' } })
-  }
+  // Cancel any existing pending order and create new one atomically to prevent duplicates
+  const order = await prisma.$transaction(async (tx) => {
+    // Cancel previous pending order within same transaction to avoid race condition
+    await tx.order.updateMany({
+      where: { userId: access.userId, purchaseWindowId: params.windowId, status: 'PENDING' },
+      data: { status: 'CANCELLED' },
+    })
 
-  const order = await prisma.order.create({
-    data: {
-      userId: access.userId,
-      clubId: params.clubId,
-      purchaseWindowId: params.windowId,
-      totalAmount,
-      items: {
-        create: parsed.data.items.map((item) => ({
-          productId: item.productId,
-          clubId: params.clubId,
-          size: item.size,
-          quantity: item.quantity,
-          price: priceMap[item.productId],
-        })),
+    return tx.order.create({
+      data: {
+        userId: access.userId,
+        clubId: params.clubId,
+        purchaseWindowId: params.windowId,
+        totalAmount,
+        items: {
+          create: parsed.data.items.map((item) => ({
+            productId: item.productId,
+            clubId: params.clubId,
+            size: item.size,
+            quantity: item.quantity,
+            price: priceMap[item.productId],
+          })),
+        },
       },
-    },
-    include: {
-      items: { include: { product: { select: { id: true, name: true } } } },
-    },
+      include: {
+        items: { include: { product: { select: { id: true, name: true } } } },
+      },
+    })
   })
 
   await writeAudit({

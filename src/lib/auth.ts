@@ -72,6 +72,20 @@ export const authOptions: NextAuthOptions = {
         })
       }
 
+      // Check if this OAuth account is already linked to a DIFFERENT user (account takeover prevention)
+      const existingOAuth = await prisma.oAuthAccount.findUnique({
+        where: {
+          provider_providerAccountId: {
+            provider: account.provider,
+            providerAccountId: account.providerAccountId,
+          },
+        },
+      })
+      if (existingOAuth && existingOAuth.userId !== dbUser.id) {
+        // This provider account is linked to a different user — deny login
+        return false
+      }
+
       // Upsert OAuth account link
       await prisma.oAuthAccount.upsert({
         where: {

@@ -34,8 +34,13 @@ export async function requireClubAccess(
   const userId = (session.user as { id: string }).id
   const globalRole = (session.user as { role: string }).role as UserRole
 
-  // Super Admin bypasses club membership check
+  // Super Admin bypasses club membership check — always re-verify from DB to prevent
+  // stale JWT tokens granting SUPER_ADMIN access after role was downgraded
   if (globalRole === 'SUPER_ADMIN') {
+    const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+    if (dbUser?.role !== 'SUPER_ADMIN') {
+      return { ok: false, response: Response.json({ error: 'Forbidden' }, { status: 403 }) }
+    }
     return { ok: true, userId, clubId, role: 'SUPER_ADMIN', membershipId: '' }
   }
 
@@ -72,11 +77,16 @@ export async function requireAuth() {
   return { ok: true as const, userId, role }
 }
 
-/** Super Admin only. */
+/** Super Admin only. Always re-verifies role from DB to prevent stale JWT escalation. */
 export async function requireSuperAdmin() {
   const auth = await requireAuth()
   if (!auth.ok) return auth
   if (auth.role !== 'SUPER_ADMIN') {
+    return { ok: false as const, response: Response.json({ error: 'Forbidden' }, { status: 403 }) }
+  }
+  // Re-verify from DB — JWT may be stale after role change
+  const dbUser = await prisma.user.findUnique({ where: { id: auth.userId }, select: { role: true } })
+  if (dbUser?.role !== 'SUPER_ADMIN') {
     return { ok: false as const, response: Response.json({ error: 'Forbidden' }, { status: 403 }) }
   }
   return auth

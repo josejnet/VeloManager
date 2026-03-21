@@ -29,6 +29,11 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
   const amount = parsed.data.amount
   const delta = parsed.data.type === 'INCOME' ? amount : -amount
 
+  // Prevent negative balance on expense
+  if (parsed.data.type === 'EXPENSE' && Number(bankAccount.balance) < amount) {
+    return err('Saldo insuficiente: el gasto supera el saldo disponible', 400)
+  }
+
   const [transaction] = await prisma.$transaction([
     prisma.transaction.create({
       data: {
