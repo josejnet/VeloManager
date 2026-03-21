@@ -24,7 +24,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     })
     if (membership) {
       club = membership.club
-      membershipRole = membership.role
+      membershipRole = membership.role as 'CLUB_ADMIN' | 'SOCIO'
     }
   }
 
