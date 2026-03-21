@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 
 interface AuditParams {
@@ -16,7 +17,12 @@ interface AuditParams {
  */
 export async function writeAudit(params: AuditParams): Promise<void> {
   try {
-    await prisma.auditLog.create({ data: params })
+    await prisma.auditLog.create({
+      data: {
+        ...params,
+        details: params.details as Prisma.InputJsonValue | undefined,
+      },
+    })
   } catch (e) {
     console.error('[Audit] Failed to write log', e)
   }

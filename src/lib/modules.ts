@@ -77,5 +77,5 @@ export async function getClubModules(clubId: string): Promise<string[]> {
     else planModules.delete(o.module.key)
   }
 
-  return [...planModules]
+  return Array.from(planModules)
 }

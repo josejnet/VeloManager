@@ -35,7 +35,7 @@ export async function GET(
       orderBy: { createdAt: 'desc' },
       include: {
         user: { select: { id: true, name: true, email: true } },
-        items: { include: { product: { select: { id: true, name: true, imageUrl: true } } } },
+        items: { include: { product: { select: { id: true, name: true, images: true } } } },
       },
     }),
     prisma.order.count({ where }),

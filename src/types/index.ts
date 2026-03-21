@@ -91,7 +91,7 @@ export type TransactionWithCategory = Transaction & {
 // ─── Order (enriched) ────────────────────────────────────────────────────
 export type OrderWithItems = Order & {
   user: Pick<User, 'id' | 'name' | 'email'>
-  items: (OrderItem & { product: Pick<Product, 'id' | 'name' | 'imageUrl'> })[]
+  items: (OrderItem & { product: Pick<Product, 'id' | 'name' | 'images'> })[]
 }
 
 // ─── Vote (enriched) ─────────────────────────────────────────────────────

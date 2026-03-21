@@ -33,7 +33,7 @@ export async function GET(
   })
 
   // Get product names
-  const productIds = [...new Set(summaryRaw.map((r) => r.productId))]
+  const productIds = Array.from(new Set(summaryRaw.map((r) => r.productId)))
   const products = await prisma.product.findMany({
     where: { id: { in: productIds } },
     select: { id: true, name: true },

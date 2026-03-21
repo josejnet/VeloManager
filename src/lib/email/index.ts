@@ -33,7 +33,7 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
       to: Array.isArray(payload.to) ? payload.to : [payload.to],
       subject: payload.subject,
       html: payload.html,
-      replyTo: payload.replyTo,
+      reply_to: payload.replyTo,
     })
     return
   }

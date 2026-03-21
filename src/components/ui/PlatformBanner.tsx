@@ -62,7 +62,7 @@ export function PlatformBannerStrip({ clubId }: { clubId?: string }) {
             </a>
           )}
           <button
-            onClick={(e) => { e.stopPropagation(); setDismissed((prev) => new Set([...prev, banner.id])) }}
+            onClick={(e) => { e.stopPropagation(); setDismissed((prev) => new Set(Array.from(prev).concat(banner.id))) }}
             className="text-gray-400 hover:text-gray-600 flex-shrink-0"
           >
             <X className="h-4 w-4" />
