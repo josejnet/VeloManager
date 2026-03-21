@@ -36,7 +36,7 @@ export default function LoginPage() {
             <Trophy className="h-5 w-5 text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Club Nexus</h1>
+            <h1 className="text-xl font-bold text-gray-900">Clube</h1>
             <p className="text-sm text-gray-400">Inicia sesión en tu cuenta</p>
           </div>
         </div>

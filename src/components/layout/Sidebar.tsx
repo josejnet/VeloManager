@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, Users, Wallet, ShoppingBag, Vote,
   Settings, ClipboardList, LogOut, Trophy, Globe,
+  Calendar, Mail, Bell, BarChart2, AlertCircle, User,
+  ShieldCheck,
 } from 'lucide-react'
 
 interface NavItem {
@@ -17,11 +19,14 @@ interface NavItem {
 const adminNav: NavItem[] = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Socios', href: '/admin/members', icon: Users },
+  { label: 'Deudas', href: '/admin/members/debt', icon: AlertCircle },
   { label: 'Contabilidad', href: '/admin/accounting', icon: Wallet },
+  { label: 'Informes', href: '/admin/accounting/reports', icon: BarChart2 },
   { label: 'Compras conjuntas', href: '/admin/purchases', icon: ShoppingBag },
   { label: 'Votaciones', href: '/admin/votes', icon: Vote },
+  { label: 'Eventos', href: '/admin/events', icon: Calendar },
   { label: 'Mensajería', href: '/admin/messages', icon: Globe },
-  { label: 'Anuncios', href: '/admin/announcements', icon: Trophy },
+  { label: 'Anuncios', href: '/admin/announcements', icon: Bell },
   { label: 'Auditoría', href: '/admin/audit', icon: ClipboardList },
   { label: 'Configuración', href: '/admin/settings', icon: Settings },
 ]
@@ -30,13 +35,17 @@ const socioNav: NavItem[] = [
   { label: 'Mi Club', href: '/socio', icon: LayoutDashboard },
   { label: 'Mis Pedidos', href: '/socio/purchases', icon: ShoppingBag },
   { label: 'Votaciones', href: '/socio/votes', icon: Vote },
+  { label: 'Eventos', href: '/socio/events', icon: Calendar },
+  { label: 'Mensajes', href: '/socio/inbox', icon: Mail },
+  { label: 'Mi Perfil', href: '/socio/profile', icon: User },
 ]
 
 const superAdminNav: NavItem[] = [
   { label: 'Plataforma', href: '/superadmin', icon: Globe },
   { label: 'Todos los clubs', href: '/superadmin/clubs', icon: Trophy },
   { label: 'Usuarios', href: '/superadmin/users', icon: Users },
-  { label: 'Banners', href: '/superadmin/banners', icon: Vote },
+  { label: 'Banners', href: '/superadmin/banners', icon: Bell },
+  { label: 'Módulos', href: '/superadmin/modules', icon: ShieldCheck },
 ]
 
 interface SidebarProps {
@@ -44,11 +53,16 @@ interface SidebarProps {
   clubName?: string
   clubLogo?: string | null
   colorTheme?: string
+  /** If true, we're showing the SOCIO view but user is actually a CLUB_ADMIN */
+  isAdminViewingAsSocio?: boolean
 }
 
-export function Sidebar({ role, clubName, clubLogo, colorTheme }: SidebarProps) {
+export function Sidebar({ role, clubName, clubLogo, colorTheme, isAdminViewingAsSocio }: SidebarProps) {
   const pathname = usePathname()
   const nav = role === 'SUPER_ADMIN' ? superAdminNav : role === 'CLUB_ADMIN' ? adminNav : socioNav
+
+  // If a CLUB_ADMIN is currently in the socio view, show socio nav + admin panel link
+  const effectiveNav = isAdminViewingAsSocio ? socioNav : nav
 
   return (
     <aside className="w-64 min-h-screen bg-white border-r border-gray-100 flex flex-col">
@@ -64,18 +78,31 @@ export function Sidebar({ role, clubName, clubLogo, colorTheme }: SidebarProps) 
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold text-gray-900 truncate">
-              {clubName ?? 'Club Nexus'}
+              {clubName ?? 'Clube'}
             </p>
             <p className="text-xs text-gray-400">
-              {role === 'SUPER_ADMIN' ? 'Super Admin' : role === 'CLUB_ADMIN' ? 'Administrador' : 'Socio'}
+              {role === 'SUPER_ADMIN' ? 'Super Admin' : role === 'CLUB_ADMIN' && !isAdminViewingAsSocio ? 'Administrador' : 'Socio'}
             </p>
           </div>
         </div>
       </div>
 
+      {/* Admin panel banner (shown when CLUB_ADMIN is in socio view) */}
+      {isAdminViewingAsSocio && (
+        <div className="mx-3 mt-3">
+          <Link
+            href="/admin"
+            className="flex items-center gap-2 px-3 py-2 bg-primary/10 text-primary rounded-lg text-xs font-semibold hover:bg-primary/20 transition-colors"
+          >
+            <ShieldCheck className="h-4 w-4 flex-shrink-0" />
+            Panel de administración
+          </Link>
+        </div>
+      )}
+
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {nav.map((item) => {
+        {effectiveNav.map((item) => {
           const active = pathname === item.href || (item.href !== '/admin' && item.href !== '/socio' && pathname.startsWith(item.href))
           return (
             <Link

@@ -17,7 +17,6 @@ export default async function LandingPage() {
       where: { userId, status: 'APPROVED' },
       select: { role: true },
     })
-    if (membership?.role === 'CLUB_ADMIN') redirect('/admin')
     if (membership) redirect('/socio')
 
     // Authenticated but no club yet
@@ -31,7 +30,7 @@ export default async function LandingPage() {
           <div className="h-9 w-9 bg-blue-600 rounded-xl flex items-center justify-center">
             <Trophy className="h-5 w-5 text-white" />
           </div>
-          <span className="text-xl font-bold text-gray-900">Club Nexus</span>
+          <span className="text-xl font-bold text-gray-900">Clube</span>
         </div>
         <div className="flex gap-3">
           <Link href="/login" className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">

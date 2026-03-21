@@ -7,7 +7,7 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Club Nexus — Gestión de Clubes Deportivos',
+  title: 'Clube — Gestión de Clubes Deportivos',
   description: 'Plataforma SaaS para la gestión integral de clubes deportivos',
 }
 

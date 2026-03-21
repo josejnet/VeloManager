@@ -73,6 +73,28 @@ enum AnnouncementTarget {
   LOCALITY     // clubs in a locality
 }
 
+enum SubscriptionPlan {
+  FREE        // up to 30 members, basic modules
+  PRO         // up to 150 members
+  PREMIUM     // up to 500 members
+  ENTERPRISE  // unlimited
+}
+
+enum EventType {
+  TRAINING
+  RACE
+  SOCIAL
+  MEETING
+  TRIP
+  OTHER
+}
+
+enum AttendeeStatus {
+  GOING
+  NOT_GOING
+  MAYBE
+}
+
 // ─── Core: Users & Auth ───────────────────────────────────────────────────────
 
 model User {
@@ -99,6 +121,7 @@ model User {
   sentMessages        ClubMessage[]         @relation("MessageSender")
   receivedMessages    ClubMessageRecipient[]
   passwordResets      PasswordReset[]
+  eventAttendances    EventAttendee[]
 
   @@index([email])
   @@index([role])
@@ -174,6 +197,10 @@ model Club {
   messages          ClubMessage[]
   clubAnnouncements ClubAnnouncement[]
   sharedFiles       SharedFile[]
+  subscription      ClubSubscription?
+  moduleAccess      ClubModuleAccess[]
+  events            ClubEvent[]
+  customRoles       ClubCustomRole[]
 
   @@index([active])
   @@index([sport])
@@ -193,9 +220,10 @@ model ClubMembership {
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
 
-  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  club   Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  quotas MemberQuota[]
+  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club        Club                   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  quotas      MemberQuota[]
+  customRoles ClubMemberCustomRole[]
 
   @@unique([userId, clubId])
   @@index([clubId, status])          // most common query: list members of club by status
@@ -502,10 +530,10 @@ model ClubMessage {
 }
 
 model ClubMessageRecipient {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   messageId String
   userId    String
-  read      Boolean  @default(false)
+  read      Boolean   @default(false)
   readAt    DateTime?
 
   message ClubMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
@@ -542,7 +570,7 @@ model ClubAnnouncement {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
-  club       Club        @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  club        Club         @relation(fields: [clubId], references: [id], onDelete: Cascade)
   sharedFiles SharedFile[]
 
   @@index([clubId, publishAt(sort: Desc)])
@@ -551,15 +579,15 @@ model ClubAnnouncement {
 }
 
 model SharedFile {
-  id               String   @id @default(cuid())
-  clubId           String
-  announcementId   String?
-  uploadedBy       String
-  name             String
-  url              String
-  size             Int?     // bytes
-  mimeType         String?
-  createdAt        DateTime @default(now())
+  id             String    @id @default(cuid())
+  clubId         String
+  announcementId String?
+  uploadedBy     String
+  name           String
+  url            String
+  size           Int?      // bytes
+  mimeType       String?
+  createdAt      DateTime  @default(now())
 
   club         Club              @relation(fields: [clubId], references: [id], onDelete: Cascade)
   announcement ClubAnnouncement? @relation(fields: [announcementId], references: [id])
@@ -570,28 +598,28 @@ model SharedFile {
 // ─── Anuncios del SuperAdmin (Plataforma global) ──────────────────────────
 
 model PlatformBanner {
-  id          String             @id @default(cuid())
-  title       String
-  body        String
-  imageUrl    String?
-  linkUrl     String?
-  linkLabel   String?
+  id             String             @id @default(cuid())
+  title          String
+  body           String
+  imageUrl       String?
+  linkUrl        String?
+  linkLabel      String?
   // Targeting
-  targetType  AnnouncementTarget @default(ALL)
-  targetSport String?    // filter by sport
-  targetProvince String? // filter by province
-  targetLocality String? // filter by locality
-  targetClubIds  String[] // specific clubs (overrides other filters)
+  targetType     AnnouncementTarget @default(ALL)
+  targetSport    String?    // filter by sport
+  targetProvince String?    // filter by province
+  targetLocality String?    // filter by locality
+  targetClubIds  String[]   // specific clubs (overrides other filters)
   targetRoles    UserRole[] // CLUB_ADMIN | SOCIO | both
   // Scheduling
-  active      Boolean  @default(true)
-  publishAt   DateTime @default(now())
-  expiresAt   DateTime?
+  active         Boolean  @default(true)
+  publishAt      DateTime @default(now())
+  expiresAt      DateTime?
   // Metrics
-  viewCount   Int      @default(0)
-  clickCount  Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  viewCount      Int      @default(0)
+  clickCount     Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([active, publishAt])
   @@index([targetType])
@@ -646,4 +674,124 @@ model Sport {
   name  String @unique
   icon  String // lucide icon name
   order Int    @default(0)
+}
+
+// ─── Sistema de Módulos y Planes ─────────────────────────────────────────────
+
+model PlatformModule {
+  id              String             @id @default(cuid())
+  key             String             @unique  // e.g. "accounting", "purchases", "votes", "messaging", "events"
+  name            String
+  description     String?
+  icon            String?            // lucide icon name
+  stable          Boolean            @default(true)
+  version         String             @default("1.0")
+  // Which plans include this module by default
+  includedInPlans SubscriptionPlan[]
+  createdAt       DateTime           @default(now())
+
+  clubAccess ClubModuleAccess[]
+}
+
+model ClubModuleAccess {
+  id             String    @id @default(cuid())
+  clubId         String
+  moduleId       String
+  enabled        Boolean   @default(true)
+  // Override: SuperAdmin can grant access regardless of plan
+  grantedByAdmin Boolean   @default(false)
+  trialEndsAt    DateTime?
+  enabledAt      DateTime  @default(now())
+
+  club   Club           @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  module PlatformModule @relation(fields: [moduleId], references: [id])
+
+  @@unique([clubId, moduleId])
+  @@index([clubId, enabled])
+}
+
+// ─── Suscripción del Club ──────────────────────────────────────────────────
+
+model ClubSubscription {
+  id          String           @id @default(cuid())
+  clubId      String           @unique
+  plan        SubscriptionPlan @default(FREE)
+  memberLimit Int?             // null = unlimited (ENTERPRISE)
+  validFrom   DateTime         @default(now())
+  validTo     DateTime?        // null = perpetual
+  notes       String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+}
+
+// ─── Calendario de Eventos ────────────────────────────────────────────────
+
+model ClubEvent {
+  id           String    @id @default(cuid())
+  clubId       String
+  authorId     String
+  type         EventType @default(OTHER)
+  title        String
+  description  String?
+  location     String?
+  startAt      DateTime
+  endAt        DateTime?
+  allDay       Boolean   @default(false)
+  maxAttendees Int?
+  imageUrl     String?
+  published    Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  club      Club            @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  attendees EventAttendee[]
+
+  @@index([clubId, startAt])
+  @@index([clubId, published])
+}
+
+model EventAttendee {
+  id          String         @id @default(cuid())
+  eventId     String
+  userId      String
+  clubId      String
+  status      AttendeeStatus @default(GOING)
+  note        String?
+  respondedAt DateTime       @default(now())
+
+  event ClubEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([clubId, eventId])
+  @@index([userId, clubId])
+}
+
+// ─── Roles personalizados dentro del club ────────────────────────────────
+
+model ClubCustomRole {
+  id          String   @id @default(cuid())
+  clubId      String
+  name        String   // "Tesorero", "Secretario", "Capitán"
+  description String?
+  color       String?  // hex color for badge
+  createdAt   DateTime @default(now())
+
+  club    Club                   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  members ClubMemberCustomRole[]
+
+  @@index([clubId])
+}
+
+model ClubMemberCustomRole {
+  id           String @id @default(cuid())
+  membershipId String
+  customRoleId String
+
+  membership ClubMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  customRole ClubCustomRole @relation(fields: [customRoleId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, customRoleId])
 }

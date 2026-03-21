@@ -25,14 +25,48 @@ async function main() {
     ],
   })
 
+  // ── Platform modules ────────────────────────────────────────────────────
+  const moduleData = [
+    { key: 'members', name: 'Gestión de Socios', description: 'Alta, baja y gestión de miembros del club', icon: 'Users', includedInPlans: ['FREE', 'PRO', 'PREMIUM', 'ENTERPRISE'] },
+    { key: 'accounting_basic', name: 'Contabilidad básica', description: 'Libro de caja y saldo', icon: 'Wallet', includedInPlans: ['FREE', 'PRO', 'PREMIUM', 'ENTERPRISE'] },
+    { key: 'accounting', name: 'Contabilidad completa', description: 'Facturas, cuotas, informes financieros', icon: 'BarChart2', includedInPlans: ['PRO', 'PREMIUM', 'ENTERPRISE'] },
+    { key: 'purchases', name: 'Compras conjuntas', description: 'Campañas de equipación y pedidos', icon: 'ShoppingBag', includedInPlans: ['PRO', 'PREMIUM', 'ENTERPRISE'] },
+    { key: 'votes', name: 'Votaciones', description: 'Encuestas y votaciones democráticas', icon: 'Vote', includedInPlans: ['PRO', 'PREMIUM', 'ENTERPRISE'] },
+    { key: 'announcements', name: 'Anuncios y archivos', description: 'Tablón de anuncios y documentos compartidos', icon: 'Bell', includedInPlans: ['FREE', 'PRO', 'PREMIUM', 'ENTERPRISE'] },
+    { key: 'messaging', name: 'Mensajería interna', description: 'Mensajes de gestor a socios con email', icon: 'Mail', includedInPlans: ['PRO', 'PREMIUM', 'ENTERPRISE'] },
+    { key: 'events', name: 'Calendario de eventos', description: 'Gestión de entrenamientos, carreras y eventos', icon: 'Calendar', includedInPlans: ['PREMIUM', 'ENTERPRISE'] },
+    { key: 'audit', name: 'Auditoría', description: 'Registro inmutable de acciones críticas', icon: 'ClipboardList', includedInPlans: ['PREMIUM', 'ENTERPRISE'] },
+    { key: 'reports', name: 'Informes financieros', description: 'Gráficos y análisis de contabilidad', icon: 'BarChart2', includedInPlans: ['PREMIUM', 'ENTERPRISE'] },
+    { key: 'custom_roles', name: 'Roles personalizados', description: 'Tesorero, secretario, capitán, etc.', icon: 'ShieldCheck', includedInPlans: ['ENTERPRISE'] },
+  ]
+
+  for (const m of moduleData) {
+    await prisma.platformModule.upsert({
+      where: { key: m.key },
+      update: {},
+      create: m,
+    })
+  }
+
   // ── Super Admin ─────────────────────────────────────────────────────────
   const superAdmin = await prisma.user.upsert({
+    where: { email: 'superadmin@clube.app' },
+    update: {},
+    create: {
+      name: 'Super Admin',
+      email: 'superadmin@clube.app',
+      password: await hash('clube1234', 12),
+      role: 'SUPER_ADMIN',
+    },
+  })
+  // Keep legacy email working too
+  await prisma.user.upsert({
     where: { email: 'superadmin@nexus.dev' },
     update: {},
     create: {
       name: 'Super Admin',
       email: 'superadmin@nexus.dev',
-      password: await hash('nexus1234', 12),
+      password: await hash('clube1234', 12),
       role: 'SUPER_ADMIN',
     },
   })
@@ -40,58 +74,42 @@ async function main() {
 
   // ── Demo club admin ─────────────────────────────────────────────────────
   const adminUser = await prisma.user.upsert({
-    where: { email: 'admin@velonexus.com' },
+    where: { email: 'admin@velo.cc' },
     update: {},
     create: {
       name: 'Carlos Velo',
-      email: 'admin@velonexus.com',
-      password: await hash('nexus1234', 12),
+      email: 'admin@velo.cc',
+      password: await hash('clube1234', 12),
       role: 'CLUB_ADMIN',
     },
   })
 
   // ── Demo socios ─────────────────────────────────────────────────────────
-  const socios = await Promise.all(
-    [
-      { name: 'Ana García', email: 'ana@socio.com' },
-      { name: 'Luis Martín', email: 'luis@socio.com' },
-      { name: 'María López', email: 'maria@socio.com' },
-      { name: 'Pedro Sánchez', email: 'pedro@socio.com' },
-    ].map((s) =>
-      prisma.user.upsert({
-        where: { email: s.email },
-        update: {},
-        create: { ...s, password: hash('nexus1234', 12).then((h) => h), role: 'SOCIO' },
-      })
-    )
-  )
-
-  // Create socios with hashed passwords
   const hashedSocios = await Promise.all([
     prisma.user.upsert({
       where: { email: 'ana@socio.com' },
       update: {},
-      create: { name: 'Ana García', email: 'ana@socio.com', password: await hash('nexus1234', 12), role: 'SOCIO' },
+      create: { name: 'Ana García', email: 'ana@socio.com', password: await hash('clube1234', 12), role: 'SOCIO' },
     }),
     prisma.user.upsert({
       where: { email: 'luis@socio.com' },
       update: {},
-      create: { name: 'Luis Martín', email: 'luis@socio.com', password: await hash('nexus1234', 12), role: 'SOCIO' },
+      create: { name: 'Luis Martín', email: 'luis@socio.com', password: await hash('clube1234', 12), role: 'SOCIO' },
     }),
     prisma.user.upsert({
       where: { email: 'maria@socio.com' },
       update: {},
-      create: { name: 'María López', email: 'maria@socio.com', password: await hash('nexus1234', 12), role: 'SOCIO' },
+      create: { name: 'María López', email: 'maria@socio.com', password: await hash('clube1234', 12), role: 'SOCIO' },
     }),
   ])
 
   // ── Demo club ────────────────────────────────────────────────────────────
-  let club = await prisma.club.findFirst({ where: { name: 'Velo Nexus CC' } })
+  let club = await prisma.club.findFirst({ where: { name: 'Velo CC' } })
 
   if (!club) {
     club = await prisma.club.create({
       data: {
-        name: 'Velo Nexus CC',
+        name: 'Velo CC',
         slogan: 'Pedaleando juntos hacia la cima',
         sport: 'Ciclismo',
         colorTheme: 'blue',
@@ -137,23 +155,32 @@ async function main() {
       )
     )
 
-    // Sample transactions
+    // Sample transactions (spread across months for charts)
     await prisma.transaction.createMany({
       data: [
-        { bankAccountId: bank.id, clubId: club.id, type: 'INCOME', amount: 1200, description: 'Patrocinio Ciclotienda Pro', date: new Date('2025-01-10'), incomeCategoryId: patrocinios.id },
-        { bankAccountId: bank.id, clubId: club.id, type: 'INCOME', amount: 500, description: 'Cuotas enero 2025', date: new Date('2025-01-15'), incomeCategoryId: cuotas.id },
-        { bankAccountId: bank.id, clubId: club.id, type: 'EXPENSE', amount: 350, description: 'Alquiler vestuarios enero', date: new Date('2025-01-20'), expenseCategoryId: instalaciones.id },
-        { bankAccountId: bank.id, clubId: club.id, type: 'EXPENSE', amount: 150, description: 'Cámaras y herramientas', date: new Date('2025-02-05'), expenseCategoryId: material.id },
-        { bankAccountId: bank.id, clubId: club.id, type: 'INCOME', amount: 2000, description: 'Subvención municipal', date: new Date('2025-02-15'), incomeCategoryId: patrocinios.id },
+        { bankAccountId: bank.id, clubId: club.id, type: 'INCOME', amount: 1200, description: 'Patrocinio Ciclotienda Pro', date: new Date('2025-09-10'), incomeCategoryId: patrocinios.id },
+        { bankAccountId: bank.id, clubId: club.id, type: 'INCOME', amount: 500, description: 'Cuotas septiembre', date: new Date('2025-09-15'), incomeCategoryId: cuotas.id },
+        { bankAccountId: bank.id, clubId: club.id, type: 'EXPENSE', amount: 350, description: 'Alquiler vestuarios', date: new Date('2025-09-20'), expenseCategoryId: instalaciones.id },
+        { bankAccountId: bank.id, clubId: club.id, type: 'INCOME', amount: 2000, description: 'Subvención municipal', date: new Date('2025-10-15'), incomeCategoryId: patrocinios.id },
+        { bankAccountId: bank.id, clubId: club.id, type: 'EXPENSE', amount: 150, description: 'Cámaras y herramientas', date: new Date('2025-10-20'), expenseCategoryId: material.id },
+        { bankAccountId: bank.id, clubId: club.id, type: 'INCOME', amount: 600, description: 'Cuotas noviembre', date: new Date('2025-11-01'), incomeCategoryId: cuotas.id },
+        { bankAccountId: bank.id, clubId: club.id, type: 'EXPENSE', amount: 800, description: 'Equipación invierno', date: new Date('2025-11-15'), expenseCategoryId: material.id },
+        { bankAccountId: bank.id, clubId: club.id, type: 'INCOME', amount: 400, description: 'Cuotas diciembre', date: new Date('2025-12-01'), incomeCategoryId: cuotas.id },
+        { bankAccountId: bank.id, clubId: club.id, type: 'EXPENSE', amount: 200, description: 'Material técnico', date: new Date('2025-12-10'), expenseCategoryId: material.id },
+        { bankAccountId: bank.id, clubId: club.id, type: 'INCOME', amount: 550, description: 'Cuotas enero 2026', date: new Date('2026-01-05'), incomeCategoryId: cuotas.id },
+        { bankAccountId: bank.id, clubId: club.id, type: 'EXPENSE', amount: 350, description: 'Alquiler vestuarios enero', date: new Date('2026-01-20'), expenseCategoryId: instalaciones.id },
+        { bankAccountId: bank.id, clubId: club.id, type: 'INCOME', amount: 300, description: 'Cuotas febrero', date: new Date('2026-02-05'), incomeCategoryId: cuotas.id },
+        { bankAccountId: bank.id, clubId: club.id, type: 'EXPENSE', amount: 180, description: 'Reparaciones varias', date: new Date('2026-02-20'), expenseCategoryId: material.id },
+        { bankAccountId: bank.id, clubId: club.id, type: 'INCOME', amount: 450, description: 'Cuotas marzo', date: new Date('2026-03-05'), incomeCategoryId: cuotas.id },
       ],
     })
 
     // Quota for approved socio
-    const quota = await prisma.memberQuota.create({
+    await prisma.memberQuota.create({
       data: {
         membershipId: socioMemberships[1].id,
         clubId: club.id,
-        year: 2025,
+        year: 2026,
         amount: 120,
         status: 'PENDING',
       },
@@ -183,12 +210,12 @@ async function main() {
     })
 
     // Open purchase window
-    const window = await prisma.purchaseWindow.create({
+    await prisma.purchaseWindow.create({
       data: {
         clubId: club.id,
         name: 'Equipación 2026',
         status: 'OPEN',
-        openedAt: new Date('2025-03-01'),
+        openedAt: new Date('2026-03-01'),
         products: {
           create: [{ productId: maillot.id }, { productId: culotte.id }],
         },
@@ -212,15 +239,43 @@ async function main() {
       },
     })
 
+    // Demo event
+    await prisma.clubEvent.create({
+      data: {
+        clubId: club.id,
+        authorId: adminUser.id,
+        type: 'RACE',
+        title: 'Gran Fondo Primavera 2026',
+        description: 'Salida conjunta de 120km con diferentes niveles de ritmo. Inscripción libre para todos los socios.',
+        location: 'Salida desde el Ayuntamiento',
+        startAt: new Date('2026-04-05T08:00:00Z'),
+        endAt: new Date('2026-04-05T14:00:00Z'),
+        maxAttendees: 30,
+        published: true,
+      },
+    })
+
+    // Subscription (PRO plan)
+    await prisma.clubSubscription.create({
+      data: {
+        clubId: club.id,
+        plan: 'PRO',
+        memberLimit: 150,
+        validFrom: new Date('2026-01-01'),
+        notes: 'Plan inicial de demostración',
+      },
+    })
+
     console.log(`Club created: ${club.name} (id: ${club.id})`)
   }
 
   console.log('\n✅ Seed completado!')
   console.log('\nCredenciales de acceso:')
-  console.log('  Super Admin:  superadmin@nexus.dev  / nexus1234')
-  console.log('  Admin club:   admin@velonexus.com   / nexus1234')
-  console.log('  Socio:        luis@socio.com        / nexus1234')
-  console.log('  Socio (pendiente): ana@socio.com    / nexus1234')
+  console.log('  Super Admin:  superadmin@clube.app  / clube1234')
+  console.log('  Admin club:   admin@velo.cc         / clube1234')
+  console.log('  Socio:        luis@socio.com        / clube1234')
+  console.log('  Socio (pendiente): ana@socio.com    / clube1234')
+  console.log('\nAcceso SuperAdmin dedicado: /superadmin/login')
 }
 
 main()

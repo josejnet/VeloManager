@@ -1,5 +1,6 @@
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getThemeVars } from '@/lib/themes'
@@ -13,10 +14,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const role = (session.user as { role: string }).role as 'SUPER_ADMIN' | 'CLUB_ADMIN' | 'SOCIO'
 
   let club = null
-  let effectiveRole = role
+  let membershipRole: 'CLUB_ADMIN' | 'SOCIO' | null = null
 
   if (role !== 'SUPER_ADMIN') {
-    // Get user's primary club (first approved membership)
     const membership = await prisma.clubMembership.findFirst({
       where: { userId, status: 'APPROVED' },
       orderBy: { joinedAt: 'asc' },
@@ -24,19 +24,33 @@ export default async function DashboardLayout({ children }: { children: React.Re
     })
     if (membership) {
       club = membership.club
-      effectiveRole = membership.role
+      membershipRole = membership.role
     }
   }
+
+  // Determine view mode: a CLUB_ADMIN viewing /socio/* sees socio nav + admin shortcut
+  const headersList = headers()
+  const pathname = headersList.get('x-pathname') ?? headersList.get('x-invoke-path') ?? ''
+  const isInSocioView = pathname.startsWith('/socio')
+  const isAdminViewingAsSocio = membershipRole === 'CLUB_ADMIN' && isInSocioView
+
+  // Effective sidebar role
+  const sidebarRole = role === 'SUPER_ADMIN'
+    ? 'SUPER_ADMIN'
+    : isAdminViewingAsSocio
+      ? 'SOCIO'
+      : (membershipRole ?? 'SOCIO')
 
   const themeVars = getThemeVars(club?.colorTheme ?? 'blue')
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ cssText: themeVars } as React.CSSProperties}>
       <Sidebar
-        role={effectiveRole}
+        role={sidebarRole}
         clubName={club?.name}
         clubLogo={club?.logoUrl}
         colorTheme={club?.colorTheme}
+        isAdminViewingAsSocio={isAdminViewingAsSocio}
       />
       <div className="flex-1 flex flex-col overflow-hidden">
         {children}
