@@ -32,7 +32,7 @@ export default function ForgotPasswordPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-gray-900">Recuperar contraseña</h1>
-            <p className="text-sm text-gray-400">Club Nexus</p>
+            <p className="text-sm text-gray-400">Clube</p>
           </div>
         </div>
 

@@ -34,6 +34,7 @@ export async function GET(
         select: { status: true },
         take: 1,
       },
+      attachments: { select: { id: true, name: true, url: true, mimeType: true, size: true } },
     },
   })
 
@@ -47,6 +48,7 @@ export async function GET(
     ...event,
     attendeesCount: event._count.attendees,
     myStatus: event.attendees[0]?.status ?? null,
+    attachments: event.attachments,
   })
 }
 

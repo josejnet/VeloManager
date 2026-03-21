@@ -742,14 +742,36 @@ model ClubEvent {
   maxAttendees Int?
   imageUrl     String?
   published    Boolean   @default(true)
+  shareToken   String?   @unique  // for public share links
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  club      Club            @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  attendees EventAttendee[]
+  club        Club                @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  attendees   EventAttendee[]
+  attachments EventAttachment[]
 
   @@index([clubId, startAt])
   @@index([clubId, published])
+  @@index([shareToken])
+}
+
+// ─── Adjuntos de eventos ──────────────────────────────────────────────────
+
+model EventAttachment {
+  id           String   @id @default(cuid())
+  eventId      String
+  clubId       String   // denormalized for isolation
+  name         String
+  url          String
+  size         Int?     // bytes
+  mimeType     String?
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  event ClubEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([clubId])
 }
 
 model EventAttendee {

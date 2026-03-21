@@ -29,7 +29,7 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
     const { Resend } = await import('resend')
     const resend = new Resend(process.env.RESEND_API_KEY)
     await resend.emails.send({
-      from: process.env.EMAIL_FROM ?? 'noreply@clubnexus.app',
+      from: process.env.EMAIL_FROM ?? 'noreply@clube.app',
       to: Array.isArray(payload.to) ? payload.to : [payload.to],
       subject: payload.subject,
       html: payload.html,
@@ -45,10 +45,10 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
 
 export function passwordResetEmail(name: string, resetUrl: string) {
   return {
-    subject: 'Recuperar contraseña — Club Nexus',
+    subject: 'Recuperar contraseña — Clube',
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
-        <h2 style="color:#1e3a5f">Club Nexus</h2>
+        <h2 style="color:#1e3a5f">Clube</h2>
         <p>Hola <strong>${name}</strong>,</p>
         <p>Hemos recibido una solicitud para restablecer tu contraseña.</p>
         <p style="margin:24px 0">
@@ -74,7 +74,7 @@ export function clubMessageEmail(clubName: string, senderName: string, subject: 
         <div style="color:#374151;line-height:1.6">${body.replace(/\n/g, '<br>')}</div>
         <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
         <p style="color:#6b7280;font-size:13px">
-          <a href="${dashboardUrl}" style="color:#2563eb">Ver en Club Nexus</a>
+          <a href="${dashboardUrl}" style="color:#2563eb">Ver en Clube</a>
         </p>
       </div>
     `,

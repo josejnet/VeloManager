@@ -54,7 +54,7 @@ export default function JoinClubPage() {
           <div className="h-10 w-10 bg-blue-600 rounded-xl flex items-center justify-center">
             <Trophy className="h-5 w-5 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Club Nexus</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Clube</h1>
         </div>
 
         <Card>
