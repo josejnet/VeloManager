@@ -4,7 +4,7 @@ import { Toaster } from 'react-hot-toast'
 import { SessionProvider } from '@/components/providers/SessionProvider'
 import './globals.css'
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ['latin'], display: 'swap', preload: false })
 
 export const metadata: Metadata = {
   title: 'Clube — Gestión de Clubes Deportivos',
