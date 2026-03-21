@@ -1,0 +1,119 @@
+import { NextRequest } from 'next/server'
+import { z } from 'zod'
+import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/club-access'
+import { ok, err, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
+
+const CreateClubSchema = z.object({
+  name: z.string().min(2).max(100),
+  slogan: z.string().max(200).optional(),
+  sport: z.string().min(1),
+  colorTheme: z.string().default('blue'),
+  logoUrl: z.string().url().optional(),
+})
+
+// GET /api/clubs — list clubs the current user belongs to
+export async function GET(req: NextRequest) {
+  const auth = await requireAuth()
+  if (!auth.ok) return auth.response
+
+  const { page, pageSize, skip, take } = getPaginationParams(req.nextUrl.searchParams)
+
+  if (auth.role === 'SUPER_ADMIN') {
+    // Super Admin sees all clubs
+    const [clubs, total] = await Promise.all([
+      prisma.club.findMany({
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          bankAccount: true,
+          _count: { select: { memberships: { where: { status: 'APPROVED' } } } },
+        },
+      }),
+      prisma.club.count(),
+    ])
+    return ok(buildPaginatedResponse(clubs, total, page, pageSize))
+  }
+
+  // Regular user — only their approved clubs
+  const [memberships, total] = await Promise.all([
+    prisma.clubMembership.findMany({
+      where: { userId: auth.userId, status: 'APPROVED' },
+      skip,
+      take,
+      include: {
+        club: {
+          include: {
+            bankAccount: true,
+            _count: { select: { memberships: { where: { status: 'APPROVED' } } } },
+          },
+        },
+      },
+    }),
+    prisma.clubMembership.count({ where: { userId: auth.userId, status: 'APPROVED' } }),
+  ])
+
+  const clubs = memberships.map((m) => ({ ...m.club, myRole: m.role }))
+  return ok(buildPaginatedResponse(clubs, total, page, pageSize))
+}
+
+// POST /api/clubs — create a club (any authenticated user becomes its admin)
+export async function POST(req: NextRequest) {
+  const auth = await requireAuth()
+  if (!auth.ok) return auth.response
+
+  const body = await req.json().catch(() => null)
+  const parsed = CreateClubSchema.safeParse(body)
+  if (!parsed.success) return err(parsed.error.errors[0].message)
+
+  const club = await prisma.$transaction(async (tx) => {
+    const newClub = await tx.club.create({ data: parsed.data })
+
+    // Creator becomes CLUB_ADMIN with approved membership
+    await tx.clubMembership.create({
+      data: {
+        userId: auth.userId,
+        clubId: newClub.id,
+        role: 'CLUB_ADMIN',
+        status: 'APPROVED',
+        joinedAt: new Date(),
+      },
+    })
+
+    // Create default bank account
+    await tx.bankAccount.create({ data: { clubId: newClub.id } })
+
+    // Default categories
+    await tx.incomeCategory.createMany({
+      data: [
+        { clubId: newClub.id, name: 'Cuotas' },
+        { clubId: newClub.id, name: 'Patrocinios' },
+        { clubId: newClub.id, name: 'Subvenciones' },
+        { clubId: newClub.id, name: 'Donaciones' },
+      ],
+    })
+    await tx.expenseCategory.createMany({
+      data: [
+        { clubId: newClub.id, name: 'Material deportivo' },
+        { clubId: newClub.id, name: 'Instalaciones' },
+        { clubId: newClub.id, name: 'Transporte' },
+        { clubId: newClub.id, name: 'Seguros' },
+        { clubId: newClub.id, name: 'Administración' },
+      ],
+    })
+
+    // Default size groups
+    await tx.sizeGroup.createMany({
+      data: [
+        { clubId: newClub.id, name: 'Tallas ropa', sizes: ['XS', 'S', 'M', 'L', 'XL', 'XXL'] },
+        { clubId: newClub.id, name: 'Tallas calzado', sizes: ['36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'] },
+        { clubId: newClub.id, name: 'Unitalla', sizes: ['Única'] },
+      ],
+    })
+
+    return newClub
+  })
+
+  return ok(club, 201)
+}

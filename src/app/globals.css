@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Default theme: blue (overridden per-club via inline style) */
+  --color-primary: 37 99 235;
+  --color-primary-dark: 29 78 216;
+  --color-primary-light: 96 165 250;
+  --color-secondary: 14 165 233;
+  --color-accent: 245 158 11;
+}
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+  }
+
+  * {
+    @apply box-border;
+  }
+}
+
+@layer components {
+  .sidebar-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+           text-gray-600 hover:text-primary hover:bg-primary/5
+           transition-colors duration-150 cursor-pointer;
+  }
+
+  .sidebar-item.active {
+    @apply text-primary bg-primary/10 font-semibold;
+  }
+
+  .stat-card {
+    @apply bg-white rounded-xl border border-gray-100 p-5 shadow-sm;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { @apply bg-gray-100; }
+::-webkit-scrollbar-thumb { @apply bg-gray-300 rounded-full; }
+::-webkit-scrollbar-thumb:hover { @apply bg-gray-400; }

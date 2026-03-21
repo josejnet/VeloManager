@@ -1,0 +1,95 @@
+import type { ThemeConfig, ThemeKey } from '@/types'
+
+export const THEMES: Record<ThemeKey, ThemeConfig> = {
+  blue: {
+    key: 'blue',
+    label: 'Ciclismo Azul',
+    sport: 'Ciclismo',
+    primary: '37 99 235',
+    primaryDark: '29 78 216',
+    primaryLight: '96 165 250',
+    secondary: '14 165 233',
+    accent: '245 158 11',
+  },
+  orange: {
+    key: 'orange',
+    label: 'Running Naranja',
+    sport: 'Running',
+    primary: '234 88 12',
+    primaryDark: '194 65 12',
+    primaryLight: '251 146 60',
+    secondary: '245 158 11',
+    accent: '239 68 68',
+  },
+  green: {
+    key: 'green',
+    label: 'Triatlón Verde',
+    sport: 'Triatlón',
+    primary: '22 163 74',
+    primaryDark: '15 118 53',
+    primaryLight: '74 222 128',
+    secondary: '20 184 166',
+    accent: '234 88 12',
+  },
+  red: {
+    key: 'red',
+    label: 'Fútbol Rojo',
+    sport: 'Fútbol',
+    primary: '220 38 38',
+    primaryDark: '185 28 28',
+    primaryLight: '248 113 113',
+    secondary: '234 88 12',
+    accent: '250 204 21',
+  },
+  purple: {
+    key: 'purple',
+    label: 'Natación Violeta',
+    sport: 'Natación',
+    primary: '124 58 237',
+    primaryDark: '109 40 217',
+    primaryLight: '167 139 250',
+    secondary: '236 72 153',
+    accent: '14 165 233',
+  },
+  yellow: {
+    key: 'yellow',
+    label: 'Tenis Amarillo',
+    sport: 'Tenis',
+    primary: '202 138 4',
+    primaryDark: '161 98 7',
+    primaryLight: '250 204 21',
+    secondary: '132 204 22',
+    accent: '234 88 12',
+  },
+  teal: {
+    key: 'teal',
+    label: 'Pádel Teal',
+    sport: 'Pádel',
+    primary: '13 148 136',
+    primaryDark: '15 118 110',
+    primaryLight: '45 212 191',
+    secondary: '6 182 212',
+    accent: '124 58 237',
+  },
+  slate: {
+    key: 'slate',
+    label: 'Multideporte Slate',
+    sport: 'Multideporte',
+    primary: '71 85 105',
+    primaryDark: '51 65 85',
+    primaryLight: '100 116 139',
+    secondary: '14 165 233',
+    accent: '22 163 74',
+  },
+}
+
+export function getThemeVars(themeKey: string): string {
+  const theme = THEMES[themeKey as ThemeKey] ?? THEMES.blue
+  return [
+    `--color-primary: ${theme.primary};`,
+    `--color-primary-dark: ${theme.primaryDark};`,
+    `--color-primary-light: ${theme.primaryLight};`,
+    `--color-secondary: ${theme.secondary};`,
+    `--color-accent: ${theme.accent};`,
+  ].join(' ')
+}

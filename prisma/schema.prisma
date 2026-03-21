@@ -1,0 +1,649 @@
+// Club Nexus - Multi-tenant SaaS for sports clubs
+// Multi-tenancy strategy: Row-level isolation
+// Every club-scoped table carries clubId + indexed for performant queries at 100+ clubs
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Enable connection pooling via DATABASE_URL pointing to PgBouncer/Prisma Accelerate in production
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  CLUB_ADMIN
+  SOCIO
+}
+
+enum MembershipStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum QuotaStatus {
+  PENDING
+  PAID
+  OVERDUE
+}
+
+enum PurchaseWindowStatus {
+  DRAFT
+  OPEN
+  CLOSED
+  SCHEDULED   // window that opens automatically at a scheduled time
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  DELIVERED
+  CANCELLED
+}
+
+enum ProductCategory {
+  CLOTHING
+  FOOTWEAR
+  ACCESSORIES
+  EQUIPMENT
+  OTHER
+}
+
+enum MessageStatus {
+  DRAFT
+  SENT
+}
+
+enum AnnouncementTarget {
+  ALL          // all users of the platform (SuperAdmin only)
+  CLUB         // all members of one club
+  SPORT        // all clubs of a given sport
+  PROVINCE     // clubs in a province
+  LOCALITY     // clubs in a locality
+}
+
+// ─── Core: Users & Auth ───────────────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  password      String?  // nullable to support OAuth-only accounts
+  role          UserRole @default(SOCIO)
+  avatarUrl     String?
+  // Location for segmented announcements
+  province      String?
+  locality      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // OAuth accounts (Google, GitHub, etc.)
+  accounts      OAuthAccount[]
+
+  memberships         ClubMembership[]
+  voteResponses       VoteResponse[]
+  orders              Order[]
+  auditLogs           AuditLog[]
+  notifications       Notification[]
+  sentMessages        ClubMessage[]         @relation("MessageSender")
+  receivedMessages    ClubMessageRecipient[]
+  passwordResets      PasswordReset[]
+
+  @@index([email])
+  @@index([role])
+  @@index([province])
+  @@index([locality])
+}
+
+// OAuth accounts linked to a User (NextAuth Adapter pattern, manual implementation)
+model OAuthAccount {
+  id                String  @id @default(cuid())
+  userId            String
+  provider          String  // "google" | "github" | "facebook"
+  providerAccountId String
+  accessToken       String?
+  refreshToken      String?
+  expiresAt         Int?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+}
+
+// ─── Club (Tenant) ─────────────────────────────────────────────────────────
+
+model Club {
+  id          String   @id @default(cuid())
+  name        String
+  slogan      String?
+  sport       String   // from Sports master table
+  colorTheme  String   @default("blue")
+  logoUrl     String?
+  active      Boolean  @default(true)
+  // Location metadata (for announcement segmentation)
+  province    String?
+  locality    String?
+  country     String?  @default("España")
+  // Contact
+  contactEmail String?
+  contactPhone String?
+  website      String?
+  // Description shown on public club page
+  description  String?
+  foundedYear  Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  memberships       ClubMembership[]
+  bankAccount       BankAccount?
+  incomeCategories  IncomeCategory[]
+  expenseCategories ExpenseCategory[]
+  sizeGroups        SizeGroup[]
+  productCategories ClubProductCategory[]
+  products          Product[]
+  purchaseWindows   PurchaseWindow[]
+  votes             Vote[]
+  auditLogs         AuditLog[]
+  notifications     Notification[]
+  invoices          Invoice[]
+  messages          ClubMessage[]
+  clubAnnouncements ClubAnnouncement[]
+  sharedFiles       SharedFile[]
+
+  @@index([active])
+  @@index([sport])
+  @@index([province])
+  @@index([locality])
+}
+
+// ─── Membership (User ↔ Club) — one user can belong to MANY clubs ─────────
+
+model ClubMembership {
+  id        String           @id @default(cuid())
+  userId    String
+  clubId    String
+  status    MembershipStatus @default(PENDING)
+  role      UserRole         @default(SOCIO)
+  joinedAt  DateTime?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club   Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  quotas MemberQuota[]
+
+  @@unique([userId, clubId])
+  @@index([clubId, status])          // most common query: list members of club by status
+  @@index([userId])                  // all clubs a user belongs to
+  @@index([clubId, role])
+}
+
+// ─── Accounting / Banking ─────────────────────────────────────────────────
+
+model BankAccount {
+  id        String   @id @default(cuid())
+  clubId    String   @unique
+  balance   Decimal  @default(0) @db.Decimal(14, 2)
+  updatedAt DateTime @updatedAt
+
+  club         Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+}
+
+model IncomeCategory {
+  id        String   @id @default(cuid())
+  clubId    String
+  name      String
+  createdAt DateTime @default(now())
+
+  club         Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([clubId])
+}
+
+model ExpenseCategory {
+  id        String   @id @default(cuid())
+  clubId    String
+  name      String
+  createdAt DateTime @default(now())
+
+  club         Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([clubId])
+}
+
+model Transaction {
+  id                String          @id @default(cuid())
+  bankAccountId     String
+  clubId            String          // denormalized for efficient per-club queries
+  type              TransactionType
+  amount            Decimal         @db.Decimal(14, 2)
+  description       String
+  date              DateTime        @default(now())
+  incomeCategoryId  String?
+  expenseCategoryId String?
+  invoiceId         String?         @unique
+  quotaId           String?         @unique
+  createdAt         DateTime        @default(now())
+
+  bankAccount     BankAccount      @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  incomeCategory  IncomeCategory?  @relation(fields: [incomeCategoryId], references: [id])
+  expenseCategory ExpenseCategory? @relation(fields: [expenseCategoryId], references: [id])
+  invoice         Invoice?         @relation(fields: [invoiceId], references: [id])
+  quota           MemberQuota?     @relation(fields: [quotaId], references: [id])
+
+  @@index([clubId, date(sort: Desc)])  // bank ledger: chronological view per club
+  @@index([clubId, type])              // income vs expense filter
+  @@index([clubId, createdAt(sort: Desc)])
+}
+
+model Invoice {
+  id          String   @id @default(cuid())
+  clubId      String
+  amount      Decimal  @db.Decimal(14, 2)
+  description String
+  supplier    String
+  fileUrl     String?
+  approved    Boolean  @default(false)
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  club        Club         @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  transaction Transaction?
+
+  @@index([clubId, approved])
+  @@index([clubId, date(sort: Desc)])
+}
+
+model MemberQuota {
+  id           String      @id @default(cuid())
+  membershipId String
+  clubId       String      // denormalized for direct club queries
+  year         Int
+  amount       Decimal     @db.Decimal(14, 2)
+  status       QuotaStatus @default(PENDING)
+  paidAt       DateTime?
+  createdAt    DateTime    @default(now())
+
+  membership  ClubMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  transaction Transaction?
+
+  @@unique([membershipId, year])
+  @@index([clubId, status])        // view all pending quotas in a club
+  @@index([clubId, year])
+}
+
+// ─── Maestros ─────────────────────────────────────────────────────────────
+
+model SizeGroup {
+  id        String   @id @default(cuid())
+  clubId    String
+  name      String   // e.g. "Ropa adulto", "Calzado", "Unitalla"
+  // Ordered list of sizes — from XXS to XXXL for clothing, numeric for shoes, etc.
+  sizes     String[] // ["XXS","XS","S","M","L","XL","XXL","XXXL"] or ["35","36",...,"48"]
+  createdAt DateTime @default(now())
+
+  club     Club      @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@index([clubId])
+}
+
+// Club-level product categories (e.g. "Maillots", "Cascos", "Bidones")
+model ClubProductCategory {
+  id        String   @id @default(cuid())
+  clubId    String
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  club     Club      @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@index([clubId])
+}
+
+// ─── Compras Conjuntas ────────────────────────────────────────────────────
+
+model Product {
+  id                  String          @id @default(cuid())
+  clubId              String
+  categoryId          String?         // ClubProductCategory
+  sizeGroupId         String?         // SizeGroup for this product
+  name                String
+  description         String?
+  price               Decimal         @db.Decimal(14, 2)
+  images              String[]        // multiple image URLs
+  availableSizes      String[]        // subset of the SizeGroup sizes actually available
+  totalStock          Int?
+  category            ProductCategory @default(CLOTHING)
+  active              Boolean         @default(true)
+  // Scheduled activation window
+  activeFrom          DateTime?
+  activeTo            DateTime?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  club            Club                    @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  productCategory ClubProductCategory?    @relation(fields: [categoryId], references: [id])
+  sizeGroup       SizeGroup?              @relation(fields: [sizeGroupId], references: [id])
+  orderItems      OrderItem[]
+  purchaseWindows PurchaseWindowProduct[]
+
+  @@index([clubId, active])
+  @@index([clubId, categoryId])
+  @@index([clubId, activeFrom, activeTo])
+}
+
+model PurchaseWindow {
+  id          String               @id @default(cuid())
+  clubId      String
+  name        String
+  description String?
+  status      PurchaseWindowStatus @default(DRAFT)
+  openedAt    DateTime?
+  closedAt    DateTime?
+  // Scheduled auto-open/close
+  scheduledOpenAt  DateTime?
+  scheduledCloseAt DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  club     Club                    @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  products PurchaseWindowProduct[]
+  orders   Order[]
+
+  @@index([clubId, status])
+  @@index([clubId, scheduledOpenAt])
+}
+
+model PurchaseWindowProduct {
+  id               String @id @default(cuid())
+  purchaseWindowId String
+  productId        String
+
+  purchaseWindow PurchaseWindow @relation(fields: [purchaseWindowId], references: [id], onDelete: Cascade)
+  product        Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([purchaseWindowId, productId])
+  @@index([purchaseWindowId])
+}
+
+model Order {
+  id               String      @id @default(cuid())
+  userId           String
+  clubId           String      // denormalized
+  purchaseWindowId String
+  status           OrderStatus @default(PENDING)
+  totalAmount      Decimal     @db.Decimal(14, 2)
+  notes            String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purchaseWindow PurchaseWindow @relation(fields: [purchaseWindowId], references: [id], onDelete: Cascade)
+  items          OrderItem[]
+
+  @@index([clubId, purchaseWindowId])     // export by campaign
+  @@index([clubId, status])
+  @@index([userId, clubId])               // member's orders
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String
+  clubId    String  // denormalized for report queries
+  size      String
+  quantity  Int
+  price     Decimal @db.Decimal(14, 2)
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([clubId, productId, size])       // aggregate report: qty by product+size
+}
+
+// ─── Votaciones ───────────────────────────────────────────────────────────
+
+model Vote {
+  id          String    @id @default(cuid())
+  clubId      String
+  title       String
+  description String?
+  active      Boolean   @default(true)
+  closedAt    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  club      Club           @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  options   VoteOption[]
+  responses VoteResponse[]
+
+  @@index([clubId, active])
+}
+
+model VoteOption {
+  id     String @id @default(cuid())
+  voteId String
+  text   String
+  order  Int    @default(0)
+
+  vote      Vote           @relation(fields: [voteId], references: [id], onDelete: Cascade)
+  responses VoteResponse[]
+
+  @@index([voteId])
+}
+
+model VoteResponse {
+  id          String   @id @default(cuid())
+  voteId      String
+  userId      String
+  optionId    String
+  clubId      String   // denormalized
+  respondedAt DateTime @default(now())
+
+  vote   Vote       @relation(fields: [voteId], references: [id], onDelete: Cascade)
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  option VoteOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@unique([voteId, userId])             // 1 voto por socio
+  @@index([clubId, voteId])
+}
+
+// ─── Mensajería interna del club ──────────────────────────────────────────
+
+model ClubMessage {
+  id         String        @id @default(cuid())
+  clubId     String
+  senderId   String
+  subject    String
+  body       String        @db.Text
+  status     MessageStatus @default(DRAFT)
+  // Who receives: ALL members, specific roles, or specific users
+  targetRole UserRole?     // null = specific recipients; set = broadcast to role
+  sentAt     DateTime?
+  createdAt  DateTime      @default(now())
+
+  club       Club                   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  sender     User                   @relation("MessageSender", fields: [senderId], references: [id])
+  recipients ClubMessageRecipient[]
+  emailLogs  MessageEmailLog[]
+
+  @@index([clubId, status])
+  @@index([clubId, sentAt(sort: Desc)])
+}
+
+model ClubMessageRecipient {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  read      Boolean  @default(false)
+  readAt    DateTime?
+
+  message ClubMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([userId, read])
+}
+
+model MessageEmailLog {
+  id        String   @id @default(cuid())
+  messageId String
+  email     String
+  status    String   // "sent" | "failed" | "bounced"
+  sentAt    DateTime @default(now())
+
+  message ClubMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+// ─── Anuncios del Club (Admin → Socios) ──────────────────────────────────
+
+model ClubAnnouncement {
+  id         String    @id @default(cuid())
+  clubId     String
+  authorId   String    // ClubAdmin who created it
+  title      String
+  body       String    @db.Text
+  imageUrl   String?
+  pinned     Boolean   @default(false)
+  publishAt  DateTime  @default(now())
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  club       Club        @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  sharedFiles SharedFile[]
+
+  @@index([clubId, publishAt(sort: Desc)])
+  @@index([clubId, pinned])
+  @@index([clubId, expiresAt])
+}
+
+model SharedFile {
+  id               String   @id @default(cuid())
+  clubId           String
+  announcementId   String?
+  uploadedBy       String
+  name             String
+  url              String
+  size             Int?     // bytes
+  mimeType         String?
+  createdAt        DateTime @default(now())
+
+  club         Club              @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  announcement ClubAnnouncement? @relation(fields: [announcementId], references: [id])
+
+  @@index([clubId, createdAt(sort: Desc)])
+}
+
+// ─── Anuncios del SuperAdmin (Plataforma global) ──────────────────────────
+
+model PlatformBanner {
+  id          String             @id @default(cuid())
+  title       String
+  body        String
+  imageUrl    String?
+  linkUrl     String?
+  linkLabel   String?
+  // Targeting
+  targetType  AnnouncementTarget @default(ALL)
+  targetSport String?    // filter by sport
+  targetProvince String? // filter by province
+  targetLocality String? // filter by locality
+  targetClubIds  String[] // specific clubs (overrides other filters)
+  targetRoles    UserRole[] // CLUB_ADMIN | SOCIO | both
+  // Scheduling
+  active      Boolean  @default(true)
+  publishAt   DateTime @default(now())
+  expiresAt   DateTime?
+  // Metrics
+  viewCount   Int      @default(0)
+  clickCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([active, publishAt])
+  @@index([targetType])
+  @@index([targetSport])
+  @@index([targetProvince])
+}
+
+// ─── Auditoría ─────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  clubId    String
+  userId    String
+  action    String   // CREATE | UPDATE | DELETE | APPROVE | PAY | ...
+  entity    String   // Invoice | Quota | Member | Order | Vote | BankAccount
+  entityId  String?
+  details   Json?    // snapshot of relevant data
+  ip        String?
+  createdAt DateTime @default(now())
+
+  club Club @relation(fields: [clubId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([clubId, createdAt(sort: Desc)])   // main audit log view
+  @@index([clubId, entity])
+  @@index([clubId, userId])
+}
+
+// ─── Notificaciones ────────────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  clubId    String
+  title     String
+  message   String
+  link      String?  // optional deep-link
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])                    // unread count query
+  @@index([userId, clubId, createdAt(sort: Desc)])
+}
+
+// ─── Catálogo global (maestros del sistema) ───────────────────────────────
+
+model Sport {
+  id    String @id @default(cuid())
+  name  String @unique
+  icon  String // lucide icon name
+  order Int    @default(0)
+}
