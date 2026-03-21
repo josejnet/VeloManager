@@ -108,11 +108,6 @@ async function main() {
       prisma.incomeCategory.create({ data: { clubId: club.id, name: 'Inscripciones' } }),
     ])
 
-    // Admin membership
-    const adminMembership = await prisma.clubMembership.create({
-      data: { userId: adminUser.id, clubId: club.id, role: 'CLUB_ADMIN', status: 'APPROVED', joinedAt: new Date('2024-01-15') },
-    })
-
     // ── 50 socios ───────────────────────────────────────────────────────────
     const socioNames = [
       'Ana García', 'Luis Martín', 'María López', 'Pedro Sánchez', 'Carmen Jiménez',
@@ -334,6 +329,13 @@ async function main() {
 
     console.log(`Club created: ${club!.name} (id: ${club!.id}) with 50 socios and 24 events`)
   }
+
+  // ── Admin membership (always ensure it exists) ───────────────────────────
+  await prisma.clubMembership.upsert({
+    where: { userId_clubId: { userId: adminUser.id, clubId: club!.id } },
+    update: { role: 'CLUB_ADMIN', status: 'APPROVED' },
+    create: { userId: adminUser.id, clubId: club!.id, role: 'CLUB_ADMIN', status: 'APPROVED', joinedAt: new Date('2024-01-15') },
+  })
 
   console.log('\n✅ Seed completado!')
   console.log('\nCredenciales de acceso:')
