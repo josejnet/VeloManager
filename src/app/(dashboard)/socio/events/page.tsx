@@ -22,6 +22,7 @@ import {
   Download,
   ExternalLink,
 } from 'lucide-react'
+import { AdSlot } from '@/components/ads/AdSlot'
 import {
   startOfMonth,
   endOfMonth,
@@ -374,7 +375,10 @@ export default function SocioEventsPage() {
               </p>
             </Card>
           ) : (
-            Object.entries(eventsByMonth).map(([month, monthEvents]) => (
+            <>
+              {/* Ad slot injected as native card after first month block */}
+              <AdSlot clubId={clubId} placement="EVENTS" className="mb-1" />
+            {Object.entries(eventsByMonth).map(([month, monthEvents]) => (
               <section key={month}>
                 <h2 className="text-base font-semibold text-gray-700 capitalize mb-3 flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-primary" />
@@ -437,7 +441,8 @@ export default function SocioEventsPage() {
                   })}
                 </div>
               </section>
-            ))
+            ))}
+            </>
           )
         )}
       </main>

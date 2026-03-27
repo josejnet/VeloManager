@@ -850,3 +850,79 @@ model ClubMemberCustomRole {
 
   @@unique([membershipId, customRoleId])
 }
+
+// ─── Publicidad y Patrocinios (Ad Server) ────────────────────────────────
+
+enum AdCampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+enum AdBudgetType {
+  IMPRESSIONS  // budget counts down on each impression
+  CLICKS       // budget counts down on each click
+}
+
+enum AdPlacement {
+  DASHBOARD   // banner in member home
+  EVENTS      // injected as native card in the events list
+  CHECKOUT    // shown after order confirmation
+}
+
+enum AdEventType {
+  IMPRESSION
+  CLICK
+}
+
+model AdCampaign {
+  id             String           @id @default(cuid())
+  advertiserName String
+  title          String
+  description    String?
+  imageUrl       String?
+  linkUrl        String
+  ctaText        String           @default("Ver más")
+
+  // Targeting — empty array = match all
+  sportTypes     String[]         // e.g. ["cycling","padel"]
+  provinces      String[]         // e.g. ["Madrid","Barcelona"]
+  localities     String[]         // e.g. ["Getafe"]
+
+  // Budget
+  budgetType     AdBudgetType     @default(IMPRESSIONS)
+  budgetLimit    Int              // max impressions or clicks
+  budgetUsed     Int              @default(0)
+
+  // Placement
+  placement      AdPlacement      @default(DASHBOARD)
+
+  // Status & Scheduling
+  status         AdCampaignStatus @default(DRAFT)
+  startsAt       DateTime?
+  endsAt         DateTime?
+
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  analytics      AdAnalytic[]
+
+  @@index([status, placement])
+  @@index([status, startsAt, endsAt])
+}
+
+model AdAnalytic {
+  id         String      @id @default(cuid())
+  campaignId String
+  userId     String?     // null for unauthenticated
+  clubId     String?
+  eventType  AdEventType
+  timestamp  DateTime    @default(now())
+
+  campaign AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([campaignId, eventType])
+  @@index([campaignId, timestamp(sort: Desc)])
+}

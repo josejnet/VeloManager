@@ -8,6 +8,7 @@ import { StatCard } from '@/components/ui/StatCard'
 import { Badge, QuotaStatusBadge, OrderStatusBadge } from '@/components/ui/Badge'
 import { fmtCurrency, fmtDate } from '@/lib/utils'
 import { Wallet, ShoppingBag, Vote, Trophy } from 'lucide-react'
+import { AdSlot } from '@/components/ads/AdSlot'
 
 export default async function SocioDashboard() {
   const session = await getServerSession(authOptions)
@@ -71,6 +72,9 @@ export default async function SocioDashboard() {
           <StatCard title="Votaciones activas" value={activeVotes} icon={Vote} color="purple" />
           <StatCard title="Campañas abiertas" value={openWindows} icon={ShoppingBag} color="blue" />
         </div>
+
+        {/* Ad slot — only renders if club is not on PREMIUM/ENTERPRISE */}
+        <AdSlot clubId={clubId} placement="DASHBOARD" />
 
         <div className="grid grid-cols-2 gap-6">
           {/* Quotas */}

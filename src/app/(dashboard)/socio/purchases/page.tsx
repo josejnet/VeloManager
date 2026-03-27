@@ -9,6 +9,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Select } from '@/components/ui/Input'
 import { fmtCurrency, fmtDate } from '@/lib/utils'
 import { ShoppingCart, Package, Plus, Minus, Trash2 } from 'lucide-react'
+import { AdSlot } from '@/components/ads/AdSlot'
 import toast from 'react-hot-toast'
 
 interface CartItem {
@@ -29,6 +30,7 @@ export default function SocioPurchasesPage() {
   const [cartOpen, setCartOpen] = useState(false)
   const [tab, setTab] = useState<'open' | 'orders'>('open')
   const [placingOrder, setPlacingOrder] = useState(false)
+  const [orderConfirmed, setOrderConfirmed] = useState(false)
 
   // Persist cart to localStorage to survive page reloads
   useEffect(() => {
@@ -125,7 +127,7 @@ export default function SocioPurchasesPage() {
       toast.success('Pedido confirmado')
       setCart([])
       localStorage.removeItem('velo_cart')
-      setCartOpen(false)
+      setOrderConfirmed(true)
       fetchMyOrders()
     } else {
       const d = await res.json()
@@ -226,8 +228,18 @@ export default function SocioPurchasesPage() {
       </main>
 
       {/* Cart modal */}
-      <Modal open={cartOpen} onClose={() => setCartOpen(false)} title={`Carrito — ${selectedWindow?.name}`} size="lg">
-        {selectedWindow && (
+      <Modal open={cartOpen} onClose={() => { setCartOpen(false); setOrderConfirmed(false) }} title={orderConfirmed ? '¡Pedido confirmado!' : `Carrito — ${selectedWindow?.name}`} size="lg">
+        {/* Checkout ad slot — shown only after order confirmation */}
+        {orderConfirmed && (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600 text-center">Tu pedido ha sido registrado. El club te contactará para la entrega y el pago.</p>
+            <AdSlot clubId={clubId} placement="CHECKOUT" />
+            <div className="flex justify-center pt-2">
+              <Button onClick={() => { setCartOpen(false); setOrderConfirmed(false) }}>Cerrar</Button>
+            </div>
+          </div>
+        )}
+        {selectedWindow && !orderConfirmed && (
           <div className="space-y-4">
             {/* Product selector */}
             <div>

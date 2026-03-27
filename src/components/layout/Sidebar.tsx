@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Wallet, ShoppingBag, Vote,
   Settings, ClipboardList, LogOut, Trophy, Globe,
   Calendar, Mail, Bell, BarChart2, AlertCircle, User,
-  ShieldCheck,
+  ShieldCheck, Megaphone,
 } from 'lucide-react'
 
 interface NavItem {
@@ -45,6 +45,7 @@ const superAdminNav: NavItem[] = [
   { label: 'Todos los clubs', href: '/superadmin/clubs', icon: Trophy },
   { label: 'Usuarios', href: '/superadmin/users', icon: Users },
   { label: 'Banners', href: '/superadmin/banners', icon: Bell },
+  { label: 'Publicidad', href: '/superadmin/ads', icon: Megaphone },
   { label: 'Módulos', href: '/superadmin/modules', icon: ShieldCheck },
 ]
 
