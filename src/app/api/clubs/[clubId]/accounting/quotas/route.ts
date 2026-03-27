@@ -5,27 +5,45 @@ import { requireClubAccess } from '@/lib/club-access'
 import { writeAudit, AUDIT } from '@/lib/audit'
 import { ok, err, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
 
+export const dynamic = 'force-dynamic'
+
 const CreateQuotaSchema = z.object({
   membershipId: z.string(),
   year: z.number().int().min(2000).max(2100),
   amount: z.number().positive(),
+  dueDate: z.string().optional(),  // ISO date string
 })
 
 const PayQuotaSchema = z.object({
   quotaId: z.string(),
+  categoryId: z.string().optional(),
 })
 
 // GET /api/clubs/[clubId]/accounting/quotas
+// CLUB_ADMIN: all member quotas (filterable by status/year)
+// SOCIO: only their own quotas
 export async function GET(req: NextRequest, { params }: { params: { clubId: string } }) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId)
   if (!access.ok) return access.response
 
+  const isAdmin = access.role === 'CLUB_ADMIN' || access.role === 'SUPER_ADMIN'
   const { page, pageSize, skip, take } = getPaginationParams(req.nextUrl.searchParams)
   const status = req.nextUrl.searchParams.get('status')
   const year = req.nextUrl.searchParams.get('year')
 
+  // SOCIOs can only see their own quotas
+  let membershipId: string | undefined
+  if (!isAdmin) {
+    const membership = await prisma.clubMembership.findFirst({
+      where: { userId: access.userId, clubId: params.clubId },
+    })
+    if (!membership) return err('Membresía no encontrada', 404)
+    membershipId = membership.id
+  }
+
   const where = {
     clubId: params.clubId,
+    ...(membershipId ? { membershipId } : {}),
     ...(status ? { status: status as 'PENDING' | 'PAID' | 'OVERDUE' } : {}),
     ...(year ? { year: parseInt(year) } : {}),
   }
@@ -35,7 +53,7 @@ export async function GET(req: NextRequest, { params }: { params: { clubId: stri
       where,
       skip,
       take,
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ year: 'desc' }, { createdAt: 'desc' }],
       include: {
         membership: {
           include: { user: { select: { id: true, name: true, email: true } } },
@@ -57,7 +75,6 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
   const parsed = CreateQuotaSchema.safeParse(body)
   if (!parsed.success) return err(parsed.error.errors[0].message)
 
-  // Verify membership belongs to this club
   const membership = await prisma.clubMembership.findFirst({
     where: { id: parsed.data.membershipId, clubId: params.clubId, status: 'APPROVED' },
     include: { user: { select: { name: true } } },
@@ -70,6 +87,7 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
       clubId: params.clubId,
       year: parsed.data.year,
       amount: parsed.data.amount,
+      dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : undefined,
     },
   })
 
@@ -85,7 +103,7 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
   return ok(quota, 201)
 }
 
-// PATCH /api/clubs/[clubId]/accounting/quotas — mark quota as paid
+// PATCH /api/clubs/[clubId]/accounting/quotas — mark quota as paid → creates BankMovement
 export async function PATCH(req: NextRequest, { params }: { params: { clubId: string } }) {
   const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
   if (!access.ok) return access.response
@@ -97,35 +115,35 @@ export async function PATCH(req: NextRequest, { params }: { params: { clubId: st
   const quota = await prisma.memberQuota.findFirst({
     where: { id: parsed.data.quotaId, clubId: params.clubId },
     include: {
-      membership: { include: { user: { select: { name: true } } } },
+      membership: { include: { user: { select: { id: true, name: true } } } },
     },
   })
   if (!quota) return err('Cuota no encontrada', 404)
   if (quota.status === 'PAID') return err('La cuota ya está pagada', 409)
 
-  const bankAccount = await prisma.bankAccount.findUnique({ where: { clubId: params.clubId } })
-  if (!bankAccount) return err('Cuenta bancaria no encontrada', 404)
+  // Idempotency check — no duplicate movement for same quota
+  const existing = await prisma.bankMovement.findUnique({
+    where: { source_sourceId: { source: 'FEE', sourceId: quota.id } },
+  })
+  if (existing) return err('Ya existe un movimiento para esta cuota', 409)
 
-  // Mark paid + create income transaction in a single DB transaction
-  const [updatedQuota, transaction] = await prisma.$transaction([
+  // Mark PAID + create BankMovement atomically
+  const [updatedQuota, movement] = await prisma.$transaction([
     prisma.memberQuota.update({
       where: { id: quota.id },
       data: { status: 'PAID', paidAt: new Date() },
     }),
-    prisma.transaction.create({
+    prisma.bankMovement.create({
       data: {
-        bankAccountId: bankAccount.id,
         clubId: params.clubId,
         type: 'INCOME',
         amount: quota.amount,
         description: `Cuota ${quota.year} — ${quota.membership.user.name}`,
+        source: 'FEE',
+        sourceId: quota.id,
+        categoryId: parsed.data.categoryId ?? null,
         date: new Date(),
-        quotaId: quota.id,
       },
-    }),
-    prisma.bankAccount.update({
-      where: { id: bankAccount.id },
-      data: { balance: { increment: quota.amount } },
     }),
   ])
 
@@ -138,15 +156,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { clubId: st
     details: { member: quota.membership.user.name, year: quota.year, amount: Number(quota.amount) },
   })
 
-  // Notify the member
   await prisma.notification.create({
     data: {
       userId: quota.membership.userId,
       clubId: params.clubId,
       title: `Cuota ${quota.year} registrada`,
-      message: `Tu cuota anual ${quota.year} de ${quota.amount}€ ha sido registrada como pagada.`,
+      message: `Tu cuota anual ${quota.year} de ${Number(quota.amount).toFixed(2)}€ ha sido registrada como pagada.`,
+      link: '/socio/quotas',
     },
   })
 
-  return ok({ quota: updatedQuota, transaction })
+  return ok({ quota: updatedQuota, movement })
 }

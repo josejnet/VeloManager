@@ -8,14 +8,13 @@ import { ok, err } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
 
 const PayOrderSchema = z.object({
-  // Optional: override the payment description recorded in accounting
   note: z.string().max(300).optional(),
-  // Optional: mark which income category to use (if club has custom categories)
-  incomeCategoryId: z.string().optional(),
+  categoryId: z.string().optional(),
 })
 
 // POST /api/clubs/[clubId]/orders/[orderId]/pay
-// CLUB_ADMIN marks an order as PAID and creates the corresponding bank income transaction
+// CLUB_ADMIN marks an order as PAID.
+// Creates an OrderPayment record and a BankMovement (INCOME, source=ORDER) atomically.
 export async function POST(
   req: NextRequest,
   { params }: { params: { clubId: string; orderId: string } }
@@ -27,15 +26,12 @@ export async function POST(
   const parsed = PayOrderSchema.safeParse(body)
   if (!parsed.success) return err(parsed.error.errors[0].message)
 
-  // Fetch order with window and member info
   const order = await prisma.order.findFirst({
     where: { id: params.orderId, clubId: params.clubId },
     include: {
       user: { select: { name: true } },
       purchaseWindow: { select: { name: true } },
-      items: {
-        include: { product: { select: { name: true } } },
-      },
+      items: { include: { product: { select: { name: true } } } },
     },
   })
 
@@ -43,40 +39,59 @@ export async function POST(
   if (order.status === 'PAID') return err('Este pedido ya está marcado como pagado', 409)
   if (order.status === 'CANCELLED') return err('No se puede pagar un pedido cancelado', 400)
 
-  // Ensure the club has a bank account
+  // Ensure accounting is enabled for this club
   const bankAccount = await prisma.bankAccount.findUnique({ where: { clubId: params.clubId } })
   if (!bankAccount) return err('El club no tiene una cuenta bancaria configurada', 422)
 
-  const amount = Number(order.totalAmount)
-  const description = parsed.data.note
-    ?? `Pago pedido #${order.id.slice(-6).toUpperCase()} — ${order.user.name} — ${order.purchaseWindow.name}`
+  // Idempotency guard — prevent duplicate payments for the same order
+  const existingPayment = await prisma.orderPayment.findUnique({ where: { orderId: params.orderId } })
+  if (existingPayment?.status === 'PAID') return err('Este pedido ya está registrado como pagado', 409)
 
-  // Atomic: mark order as PAID + create bank income transaction
-  const [updatedOrder, transaction] = await prisma.$transaction([
-    prisma.order.update({
+  const amount = Number(order.totalAmount)
+  const description =
+    parsed.data.note ??
+    `Pedido #${order.id.slice(-6).toUpperCase()} — ${order.user.name} — ${order.purchaseWindow.name}`
+
+  // Atomic: update order status + create OrderPayment + create BankMovement (INCOME, source=ORDER)
+  const [updatedOrder, orderPayment, movement] = await prisma.$transaction(async (tx) => {
+    const updated = await tx.order.update({
       where: { id: order.id },
       data: { status: 'PAID' },
-    }),
-    prisma.transaction.create({
+    })
+
+    const payment = await tx.orderPayment.upsert({
+      where: { orderId: order.id },
+      create: {
+        orderId: order.id,
+        clubId: params.clubId,
+        amount,
+        status: 'PAID',
+        paidAt: new Date(),
+        note: parsed.data.note ?? null,
+      },
+      update: {
+        status: 'PAID',
+        paidAt: new Date(),
+        note: parsed.data.note ?? null,
+      },
+    })
+
+    const mov = await tx.bankMovement.create({
       data: {
-        bankAccountId: bankAccount.id,
         clubId: params.clubId,
         type: 'INCOME',
         amount,
         description,
+        source: 'ORDER',
+        sourceId: payment.id,   // movement points to OrderPayment, not Order directly
+        categoryId: parsed.data.categoryId ?? null,
         date: new Date(),
-        incomeCategoryId: parsed.data.incomeCategoryId ?? null,
-        // Link transaction back to the order for traceability
-        // (no orderId foreign key in Transaction, so we store it in description)
       },
-    }),
-    prisma.bankAccount.update({
-      where: { id: bankAccount.id },
-      data: { balance: { increment: amount } },
-    }),
-  ])
+    })
 
-  // Notify the member
+    return [updated, payment, mov]
+  })
+
   await prisma.notification.create({
     data: {
       userId: order.userId,
@@ -90,16 +105,17 @@ export async function POST(
   await writeAudit({
     clubId: params.clubId,
     userId: access.userId,
-    action: 'ORDER_PAID',
+    action: AUDIT.ORDER_PAYMENT_RECORDED,
     entity: 'Order',
     entityId: order.id,
     details: {
       member: order.user.name,
       campaign: order.purchaseWindow.name,
       amount,
-      transactionId: transaction.id,
+      orderPaymentId: orderPayment.id,
+      movementId: movement.id,
     },
   })
 
-  return ok({ order: updatedOrder, transaction })
+  return ok({ order: updatedOrder, payment: orderPayment, movement })
 }

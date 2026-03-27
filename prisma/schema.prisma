@@ -60,6 +60,23 @@ enum TransactionType {
   EXPENSE
 }
 
+// Source of a bank movement — enforces idempotency and traceability
+enum MovementSource {
+  FEE        // MemberQuota payment
+  EVENT      // EventPayment (paid event registration)
+  ORDER      // OrderPayment (purchase order)
+  INVOICE    // Invoice approval (expense)
+  MANUAL     // manually entered by admin
+  ADJUSTMENT // corrective entry (reversal / amendment)
+}
+
+// Generic payment status for EventPayment and OrderPayment
+enum PaymentStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
 enum QuotaStatus {
   PENDING
   PAID
@@ -151,6 +168,7 @@ model User {
   receivedMessages    ClubMessageRecipient[]
   passwordResets      PasswordReset[]
   eventAttendances    EventAttendee[]
+  eventPayments       EventPayment[]
   createdInvitations  ClubInvitation[]      @relation("InvitationCreator")
   targetedInvitations ClubInvitation[]      @relation("InvitationTarget")
   acceptedInvitations ClubInvitation[]      @relation("InvitationAcceptor")
@@ -223,8 +241,8 @@ model Club {
 
   memberships       ClubMembership[]
   bankAccount       BankAccount?
-  incomeCategories  IncomeCategory[]
-  expenseCategories ExpenseCategory[]
+  ledgerCategories  LedgerCategory[]
+  bankMovements     BankMovement[]
   sizeGroups        SizeGroup[]
   productCategories ClubProductCategory[]
   products          Product[]
@@ -334,62 +352,59 @@ model ClubInvitation {
 
 // ─── Accounting / Banking ─────────────────────────────────────────────────
 
+// BankAccount — 1:1 with Club. Acts as "accounting enabled" flag + optional metadata.
+// Balance is never stored here; it is always computed as SUM(INCOME) - SUM(EXPENSE) from BankMovement.
 model BankAccount {
   id        String   @id @default(cuid())
   clubId    String   @unique
-  balance   Decimal  @default(0) @db.Decimal(14, 2)
+  // Optional metadata (informational only)
+  bankName  String?
+  iban      String?
+  holder    String?
   updatedAt DateTime @updatedAt
 
-  club         Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
 }
 
-model IncomeCategory {
-  id        String   @id @default(cuid())
+// Unified category for both income and expense movements
+model LedgerCategory {
+  id        String          @id @default(cuid())
   clubId    String
   name      String
-  createdAt DateTime @default(now())
+  type      TransactionType // INCOME | EXPENSE
+  color     String?         // hex color for chart display, e.g. "#10b981"
+  createdAt DateTime        @default(now())
 
-  club         Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
+  club      Club           @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  movements BankMovement[]
 
-  @@index([clubId])
+  @@unique([clubId, name, type])
+  @@index([clubId, type])
 }
 
-model ExpenseCategory {
-  id        String   @id @default(cuid())
-  clubId    String
-  name      String
-  createdAt DateTime @default(now())
+// Append-only ledger — entries are NEVER modified after creation.
+// For corrections, create a new ADJUSTMENT entry.
+// Idempotency: @@unique([source, sourceId]) prevents double-recording the same payment.
+model BankMovement {
+  id          String          @id @default(cuid())
+  clubId      String
+  type        TransactionType // INCOME | EXPENSE
+  amount      Decimal         @db.Decimal(14, 2)
+  description String
+  categoryId  String?
+  source      MovementSource  @default(MANUAL)
+  sourceId    String?         // ID of the originating record (quotaId, orderId, invoiceId, eventPaymentId)
+  date        DateTime        @default(now())
+  createdAt   DateTime        @default(now())
 
-  club         Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
+  club     Club            @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  category LedgerCategory? @relation(fields: [categoryId], references: [id])
 
-  @@index([clubId])
-}
-
-model Transaction {
-  id                String          @id @default(cuid())
-  bankAccountId     String
-  clubId            String          // denormalized for efficient per-club queries
-  type              TransactionType
-  amount            Decimal         @db.Decimal(14, 2)
-  description       String
-  date              DateTime        @default(now())
-  incomeCategoryId  String?
-  expenseCategoryId String?
-  invoiceId         String?         @unique
-  quotaId           String?         @unique
-  createdAt         DateTime        @default(now())
-
-  bankAccount     BankAccount      @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
-  incomeCategory  IncomeCategory?  @relation(fields: [incomeCategoryId], references: [id])
-  expenseCategory ExpenseCategory? @relation(fields: [expenseCategoryId], references: [id])
-  invoice         Invoice?         @relation(fields: [invoiceId], references: [id])
-  quota           MemberQuota?     @relation(fields: [quotaId], references: [id])
-
-  @@index([clubId, date(sort: Desc)])  // bank ledger: chronological view per club
-  @@index([clubId, type])              // income vs expense filter
+  // Idempotency guard: one movement per source entity
+  @@unique([source, sourceId])
+  @@index([clubId, date(sort: Desc)])
+  @@index([clubId, type])
+  @@index([clubId, source])
   @@index([clubId, createdAt(sort: Desc)])
 }
 
@@ -404,8 +419,8 @@ model Invoice {
   date        DateTime @default(now())
   createdAt   DateTime @default(now())
 
-  club        Club         @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  transaction Transaction?
+  // BankMovement is linked via source='INVOICE', sourceId=invoice.id — no direct relation needed
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
 
   @@index([clubId, approved])
   @@index([clubId, date(sort: Desc)])
@@ -418,15 +433,17 @@ model MemberQuota {
   year         Int
   amount       Decimal     @db.Decimal(14, 2)
   status       QuotaStatus @default(PENDING)
+  dueDate      DateTime?   // specific payment deadline (null = open-ended)
   paidAt       DateTime?
   createdAt    DateTime    @default(now())
 
-  membership  ClubMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
-  transaction Transaction?
+  // BankMovement is linked via source='FEE', sourceId=quota.id — no direct relation needed
+  membership ClubMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
 
   @@unique([membershipId, year])
   @@index([clubId, status])        // view all pending quotas in a club
   @@index([clubId, year])
+  @@index([clubId, dueDate])
 }
 
 // ─── Maestros ─────────────────────────────────────────────────────────────
@@ -539,6 +556,7 @@ model Order {
   user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   purchaseWindow PurchaseWindow @relation(fields: [purchaseWindowId], references: [id], onDelete: Cascade)
   items          OrderItem[]
+  payment        OrderPayment?
 
   @@index([clubId, purchaseWindowId])     // export by campaign
   @@index([clubId, status])
@@ -850,6 +868,7 @@ model ClubEvent {
   club        Club                @relation(fields: [clubId], references: [id], onDelete: Cascade)
   attendees   EventAttendee[]
   attachments EventAttachment[]
+  payments    EventPayment[]
 
   @@index([clubId, startAt])
   @@index([clubId, published])
@@ -890,6 +909,45 @@ model EventAttendee {
   @@unique([eventId, userId])
   @@index([clubId, eventId])
   @@index([userId, clubId])
+}
+
+// ─── Event & Order Payments ───────────────────────────────────────────────
+
+// Created when a user registers for a paid event.
+// BankMovement linked via source='EVENT', sourceId=eventPayment.id
+model EventPayment {
+  id        String        @id @default(cuid())
+  eventId   String
+  userId    String
+  clubId    String        // denormalized
+  amount    Decimal       @db.Decimal(14, 2)
+  status    PaymentStatus @default(PENDING)
+  paidAt    DateTime?
+  createdAt DateTime      @default(now())
+
+  event ClubEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])       // one payment record per user per event
+  @@index([clubId, status])
+  @@index([eventId])
+}
+
+// Created when an admin marks an order as paid.
+// BankMovement linked via source='ORDER', sourceId=orderPayment.id
+model OrderPayment {
+  id        String        @id @default(cuid())
+  orderId   String        @unique
+  clubId    String        // denormalized
+  amount    Decimal       @db.Decimal(14, 2)
+  status    PaymentStatus @default(PENDING)
+  paidAt    DateTime?
+  note      String?
+  createdAt DateTime      @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([clubId, status])
 }
 
 // ─── Roles personalizados dentro del club ────────────────────────────────

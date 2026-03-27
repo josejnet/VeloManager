@@ -14,13 +14,13 @@ import { TrendingUp, TrendingDown, Scale, AlertCircle } from 'lucide-react'
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4']
 
-interface Transaction {
+interface BankMovement {
   id: string
   type: 'INCOME' | 'EXPENSE'
   amount: number
   date: string
-  expenseCategory?: { name: string } | null
-  incomeCategory?: { name: string } | null
+  source: string
+  category?: { name: string } | null
 }
 
 interface DebtMember {
@@ -42,7 +42,7 @@ function getMonthLabel(date: Date): string {
   return date.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' })
 }
 
-function buildChartData(transactions: Transaction[]): {
+function buildChartData(transactions: BankMovement[]): {
   balanceEvolution: MonthlyData[]
   incomeVsExpense: { month: string; income: number; expense: number }[]
   expenseByCategory: { name: string; value: number }[]
@@ -87,7 +87,7 @@ function buildChartData(transactions: Transaction[]): {
     }
 
     if (tx.type === 'EXPENSE') {
-      const cat = tx.expenseCategory?.name ?? 'Sin categoría'
+      const cat = tx.category?.name ?? 'Sin categoría'
       expenseByCat[cat] = (expenseByCat[cat] ?? 0) + amount
     }
   }
@@ -137,7 +137,7 @@ function StatCard({ title, value, icon, color }: StatCardProps) {
 export default function AccountingReportsPage() {
   const { data: session } = useSession()
   const [clubId, setClubId] = useState('')
-  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [transactions, setTransactions] = useState<BankMovement[]>([])
   const [debtMembers, setDebtMembers] = useState<DebtMember[]>([])
   const [pendingQuotasTotal, setPendingQuotasTotal] = useState(0)
   const [loading, setLoading] = useState(false)
