@@ -190,7 +190,7 @@ export default function AnnouncementsPage() {
                         {/* Title row */}
                         <div className="flex flex-wrap items-center gap-2 mb-1">
                           <p className="font-semibold text-gray-900">{a.title}</p>
-                          {isEmergency && <Badge variant="error">URGENTE</Badge>}
+                          {isEmergency && <Badge variant="danger">URGENTE</Badge>}
                           {a.requiresConfirmation && (
                             <Badge variant="warning">Requiere confirmación</Badge>
                           )}

@@ -37,12 +37,19 @@ export async function GET(_req: NextRequest, { params }: { params: { clubId: str
     where: {
       clubId: params.clubId,
       publishAt: { lte: now },
-      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
       id: { notIn: readIds.length ? readIds : ['__none__'] },
-      // Segmentation: include if targeting all OR if user attends the target event
-      OR: [
-        { targetEventId: null },
-        ...(attendingEventIds.length ? [{ targetEventId: { in: attendingEventIds } }] : []),
+      AND: [
+        // Must not be expired
+        { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+        // Segmentation: targeting all members OR user is attending the target event
+        {
+          OR: [
+            { targetEventId: null },
+            ...(attendingEventIds.length
+              ? [{ targetEventId: { in: attendingEventIds } }]
+              : []),
+          ],
+        },
       ],
     },
     orderBy: [{ priority: 'desc' }, { publishAt: 'desc' }],
