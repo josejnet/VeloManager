@@ -100,6 +100,19 @@ export function Sidebar({ role, clubName, clubLogo, colorTheme, isAdminViewingAs
         </div>
       )}
 
+      {/* Socio view link (shown when CLUB_ADMIN is in admin view) */}
+      {!isAdminViewingAsSocio && role === 'CLUB_ADMIN' && (
+        <div className="mx-3 mt-3">
+          <Link
+            href="/socio"
+            className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-xs font-semibold hover:bg-gray-200 transition-colors"
+          >
+            <User className="h-4 w-4 flex-shrink-0" />
+            Vista de socio
+          </Link>
+        </div>
+      )}
+
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-0.5">
         {effectiveNav.map((item) => {

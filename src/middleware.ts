@@ -4,10 +4,10 @@ import type { NextRequest } from 'next/server'
 
 export default withAuth(
   function middleware(req: NextRequest) {
-    // Inject the current pathname as a header so server layouts can read it
-    const response = NextResponse.next()
-    response.headers.set('x-pathname', req.nextUrl.pathname)
-    return response
+    // Inject the current pathname as a request header so server layouts can read it
+    const requestHeaders = new Headers(req.headers)
+    requestHeaders.set('x-pathname', req.nextUrl.pathname)
+    return NextResponse.next({ request: { headers: requestHeaders } })
   },
   {
     callbacks: {
