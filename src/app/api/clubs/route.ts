@@ -84,22 +84,18 @@ export async function POST(req: NextRequest) {
     // Create default bank account
     await tx.bankAccount.create({ data: { clubId: newClub.id } })
 
-    // Default categories
-    await tx.incomeCategory.createMany({
+    // Default ledger categories
+    await tx.ledgerCategory.createMany({
       data: [
-        { clubId: newClub.id, name: 'Cuotas' },
-        { clubId: newClub.id, name: 'Patrocinios' },
-        { clubId: newClub.id, name: 'Subvenciones' },
-        { clubId: newClub.id, name: 'Donaciones' },
-      ],
-    })
-    await tx.expenseCategory.createMany({
-      data: [
-        { clubId: newClub.id, name: 'Material deportivo' },
-        { clubId: newClub.id, name: 'Instalaciones' },
-        { clubId: newClub.id, name: 'Transporte' },
-        { clubId: newClub.id, name: 'Seguros' },
-        { clubId: newClub.id, name: 'Administración' },
+        { clubId: newClub.id, name: 'Cuotas',            type: 'INCOME' },
+        { clubId: newClub.id, name: 'Patrocinios',       type: 'INCOME' },
+        { clubId: newClub.id, name: 'Subvenciones',      type: 'INCOME' },
+        { clubId: newClub.id, name: 'Donaciones',        type: 'INCOME' },
+        { clubId: newClub.id, name: 'Material deportivo',type: 'EXPENSE' },
+        { clubId: newClub.id, name: 'Instalaciones',     type: 'EXPENSE' },
+        { clubId: newClub.id, name: 'Transporte',        type: 'EXPENSE' },
+        { clubId: newClub.id, name: 'Seguros',           type: 'EXPENSE' },
+        { clubId: newClub.id, name: 'Administración',    type: 'EXPENSE' },
       ],
     })
 

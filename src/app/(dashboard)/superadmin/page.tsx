@@ -24,7 +24,6 @@ export default async function SuperAdminPage() {
       take: 10,
       orderBy: { createdAt: 'desc' },
       include: {
-        bankAccount: true,
         _count: { select: { memberships: { where: { status: 'APPROVED' } } } },
       },
     }),
@@ -73,7 +72,7 @@ export default async function SuperAdminPage() {
                   <td className="py-3 text-gray-600">{club.sport}</td>
                   <td className="py-3 text-right font-medium">{club._count.memberships}</td>
                   <td className="py-3 text-right font-semibold">
-                    {club.bankAccount ? fmtCurrency(club.bankAccount.balance) : '—'}
+                    {'—'}
                   </td>
                   <td className="py-3 text-right text-gray-500">{fmtDate(club.createdAt)}</td>
                 </tr>

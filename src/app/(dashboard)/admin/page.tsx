@@ -28,7 +28,8 @@ export default async function AdminDashboard() {
   const [
     membersCount,
     pendingMembers,
-    bankAccount,
+    incomeAgg,
+    expenseAgg,
     recentTransactions,
     openWindows,
     activeVotes,
@@ -36,17 +37,20 @@ export default async function AdminDashboard() {
   ] = await Promise.all([
     prisma.clubMembership.count({ where: { clubId, status: 'APPROVED' } }),
     prisma.clubMembership.count({ where: { clubId, status: 'PENDING' } }),
-    prisma.bankAccount.findUnique({ where: { clubId } }),
-    prisma.transaction.findMany({
+    prisma.bankMovement.aggregate({ where: { clubId, type: 'INCOME' }, _sum: { amount: true } }),
+    prisma.bankMovement.aggregate({ where: { clubId, type: 'EXPENSE' }, _sum: { amount: true } }),
+    prisma.bankMovement.findMany({
       where: { clubId },
       take: 5,
       orderBy: { date: 'desc' },
-      include: { incomeCategory: true, expenseCategory: true },
+      include: { category: true },
     }),
     prisma.purchaseWindow.count({ where: { clubId, status: 'OPEN' } }),
     prisma.vote.count({ where: { clubId, active: true } }),
     prisma.invoice.count({ where: { clubId, approved: false } }),
   ])
+
+  const balance = Number(incomeAgg._sum.amount ?? 0) - Number(expenseAgg._sum.amount ?? 0)
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
@@ -64,7 +68,7 @@ export default async function AdminDashboard() {
           />
           <StatCard
             title="Saldo bancario"
-            value={fmtCurrency(bankAccount?.balance ?? 0)}
+            value={fmtCurrency(balance)}
             icon={Wallet}
             color="green"
           />
@@ -123,7 +127,7 @@ export default async function AdminDashboard() {
                     <div>
                       <p className="text-sm font-medium text-gray-900">{tx.description}</p>
                       <p className="text-xs text-gray-400">
-                        {tx.incomeCategory?.name ?? tx.expenseCategory?.name ?? '—'} · {fmtDate(tx.date)}
+                        {tx.category?.name ?? '—'} · {fmtDate(tx.date)}
                       </p>
                     </div>
                   </div>

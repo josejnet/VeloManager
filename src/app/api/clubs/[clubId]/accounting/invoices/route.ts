@@ -32,7 +32,6 @@ export async function GET(req: NextRequest, { params }: { params: { clubId: stri
       skip,
       take,
       orderBy: { date: 'desc' },
-      include: { transaction: true },
     }),
     prisma.invoice.count({ where }),
   ])

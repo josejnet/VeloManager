@@ -3,7 +3,8 @@ import type {
   Club,
   ClubMembership,
   BankAccount,
-  Transaction,
+  BankMovement,
+  LedgerCategory,
   Invoice,
   MemberQuota,
   Product,
@@ -15,8 +16,6 @@ import type {
   VoteResponse,
   AuditLog,
   Notification,
-  IncomeCategory,
-  ExpenseCategory,
   SizeGroup,
 } from '@prisma/client'
 
@@ -25,7 +24,8 @@ export type {
   Club,
   ClubMembership,
   BankAccount,
-  Transaction,
+  BankMovement,
+  LedgerCategory,
   Invoice,
   MemberQuota,
   Product,
@@ -37,8 +37,6 @@ export type {
   VoteResponse,
   AuditLog,
   Notification,
-  IncomeCategory,
-  ExpenseCategory,
   SizeGroup,
 }
 
@@ -80,12 +78,9 @@ export type MemberWithUser = ClubMembership & {
   quotas: MemberQuota[]
 }
 
-// ─── Transaction (enriched) ──────────────────────────────────────────────
-export type TransactionWithCategory = Transaction & {
-  incomeCategory: IncomeCategory | null
-  expenseCategory: ExpenseCategory | null
-  invoice: Invoice | null
-  quota: (MemberQuota & { membership: ClubMembership & { user: Pick<User, 'name'> } }) | null
+// ─── BankMovement (enriched) ─────────────────────────────────────────────
+export type MovementWithCategory = BankMovement & {
+  category: LedgerCategory | null
 }
 
 // ─── Order (enriched) ────────────────────────────────────────────────────
