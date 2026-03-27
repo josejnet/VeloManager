@@ -29,8 +29,7 @@ export async function GET(_req: NextRequest, { params }: { params: { clubId: str
     where: { id: params.clubId },
     include: {
       bankAccount: true,
-      incomeCategories: true,
-      expenseCategories: true,
+      ledgerCategories: true,
       sizeGroups: true,
       _count: {
         select: {
