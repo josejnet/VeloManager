@@ -67,9 +67,9 @@ export async function POST(
     userId: access.userId,
     clubId: params.clubId,
     action: 'EVENT_PAYMENT_RECORDED',
-    targetType: 'EventPayment',
-    targetId: payment.id,
-    metadata: { amount: Number(payment.amount), eventId: params.eventId, movementId: movement.id },
+    entity: 'EventPayment',
+    entityId: payment.id,
+    details: { amount: Number(payment.amount), eventId: params.eventId, movementId: movement.id },
   })
 
   return ok({ payment: updatedPayment, movement })
