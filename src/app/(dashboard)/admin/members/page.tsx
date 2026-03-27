@@ -509,10 +509,15 @@ export default function MembersPage() {
                   value={invForm.invitedEmail} onChange={(e) => setInvForm({ ...invForm, invitedEmail: e.target.value })} />
               )}
 
-              <Select label="Rol asignado al entrar" value={invForm.assignedRole} onChange={(e) => setInvForm({ ...invForm, assignedRole: e.target.value })}>
-                <option value="SOCIO">Socio</option>
-                <option value="CLUB_ADMIN">Administrador</option>
-              </Select>
+              <Select
+                label="Rol asignado al entrar"
+                value={invForm.assignedRole}
+                onChange={(e) => setInvForm({ ...invForm, assignedRole: e.target.value })}
+                options={[
+                  { value: 'SOCIO', label: 'Socio' },
+                  { value: 'CLUB_ADMIN', label: 'Administrador' },
+                ]}
+              />
 
               <Input label={`Expira en días${invChannel !== 'EMAIL' ? ' (vacío = no expira)' : ''}`}
                 type="number" min={1} max={365} placeholder={invChannel === 'EMAIL' ? '7' : 'Sin expiración'}
