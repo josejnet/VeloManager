@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { getThemeVars } from '@/lib/themes'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { EmergencyAnnouncementModal } from '@/components/announcements/EmergencyAnnouncementModal'
+import { ClubProvider } from '@/context/ClubContext'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions)
@@ -62,7 +63,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
         isAdminViewingAsSocio={isAdminViewingAsSocio}
       />
       <div className="flex-1 flex flex-col overflow-hidden">
-        {children}
+        {/* ClubProvider passes clubId/club data to all client pages via context,
+            eliminating the /api/clubs waterfall that every page was triggering. */}
+        {club ? (
+          <ClubProvider clubId={club.id} club={club}>
+            {children}
+          </ClubProvider>
+        ) : (
+          children
+        )}
       </div>
 
       {/* Emergency/pending announcement modal — client component, polls independently */}
