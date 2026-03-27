@@ -1,6 +1,5 @@
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
-import { headers } from 'next/headers'
 import { unstable_cache } from 'next/cache'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -53,18 +52,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
     }
   }
 
-  // Determine view mode: a CLUB_ADMIN viewing /socio/* sees socio nav + admin shortcut
-  const headersList = headers()
-  const pathname = headersList.get('x-pathname') ?? headersList.get('x-invoke-path') ?? ''
-  const isInSocioView = pathname.startsWith('/socio')
-  const isAdminViewingAsSocio = membershipRole === 'CLUB_ADMIN' && isInSocioView
-
-  // Effective sidebar role
+  // Sidebar role passed from server — mode switching (admin/socio) is handled
+  // client-side in Sidebar.tsx via usePathname(), so it's always in sync with the URL
   const sidebarRole = role === 'SUPER_ADMIN'
     ? 'SUPER_ADMIN'
-    : isAdminViewingAsSocio
-      ? 'SOCIO'
-      : (membershipRole ?? 'SOCIO')
+    : (membershipRole ?? 'SOCIO')
 
   // ── Branding: custom hex colors override the predefined theme palette ──────
   const themeVars = getThemeVars(
@@ -84,7 +76,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
           clubName={club?.name}
           clubLogo={club?.logoUrl}
           colorTheme={club?.colorTheme}
-          isAdminViewingAsSocio={isAdminViewingAsSocio}
         />
         <div className="flex-1 flex flex-col overflow-hidden">
           {club ? (

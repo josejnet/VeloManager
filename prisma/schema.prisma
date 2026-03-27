@@ -288,6 +288,9 @@ model Transaction {
   expenseCategoryId String?
   invoiceId         String?         @unique
   quotaId           String?         @unique
+  // Deduplication: prevents double-posting the same payment source
+  sourceType        String?         // "invoice" | "quota" | "event_payment" | "order_payment" | "manual"
+  sourceId          String?         // ID of the source record
   createdAt         DateTime        @default(now())
 
   bankAccount     BankAccount      @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
@@ -296,9 +299,36 @@ model Transaction {
   invoice         Invoice?         @relation(fields: [invoiceId], references: [id])
   quota           MemberQuota?     @relation(fields: [quotaId], references: [id])
 
-  @@index([clubId, date(sort: Desc)])  // bank ledger: chronological view per club
-  @@index([clubId, type])              // income vs expense filter
+  @@unique([sourceType, sourceId])           // dedup: one ledger entry per source
+  @@index([clubId, date(sort: Desc)])        // bank ledger: chronological view per club
+  @@index([clubId, type])                    // income vs expense filter
   @@index([clubId, createdAt(sort: Desc)])
+}
+
+// Payment for attending a paid event (e.g. race entry fee)
+model EventPayment {
+  id        String             @id @default(cuid())
+  eventId   String
+  userId    String
+  clubId    String
+  amount    Decimal            @db.Decimal(14, 2)
+  status    EventPaymentStatus @default(PENDING)
+  paidAt    DateTime?
+  notes     String?
+  createdAt DateTime           @default(now())
+
+  event ClubEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])               // one payment record per attendee per event
+  @@index([clubId, status])
+  @@index([eventId])
+  @@index([userId, clubId])
+}
+
+enum EventPaymentStatus {
+  PENDING
+  PAID
+  WAIVED   // admin can waive the fee
 }
 
 model Invoice {
@@ -782,6 +812,7 @@ model ClubEvent {
   attendees     EventAttendee[]
   attachments   EventAttachment[]
   announcements ClubAnnouncement[]
+  payments      EventPayment[]
 
   @@index([clubId, startAt])
   @@index([clubId, published])
