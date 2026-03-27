@@ -470,10 +470,15 @@ export default function MembersPage() {
         <Modal open={roleModal.open} onClose={() => setRoleModal(null)} title={`Cambiar rol — ${roleModal.memberName}`} size="sm">
           <div className="space-y-4">
             <p className="text-sm text-gray-600">Rol actual: <strong>{roleModal.currentRole === 'CLUB_ADMIN' ? 'Administrador' : 'Socio'}</strong></p>
-            <Select label="Nuevo rol" value={newRole} onChange={(e) => setNewRole(e.target.value as 'CLUB_ADMIN' | 'SOCIO')}>
-              <option value="SOCIO">Socio</option>
-              <option value="CLUB_ADMIN">Administrador</option>
-            </Select>
+            <Select
+              label="Nuevo rol"
+              value={newRole}
+              onChange={(e) => setNewRole(e.target.value as 'CLUB_ADMIN' | 'SOCIO')}
+              options={[
+                { value: 'SOCIO', label: 'Socio' },
+                { value: 'CLUB_ADMIN', label: 'Administrador' },
+              ]}
+            />
             <div className="flex gap-2">
               <Button className="flex-1" disabled={updatingId === roleModal.memberId}
                 onClick={() => doMemberAction(roleModal.memberId, 'change_role', { role: newRole })}>

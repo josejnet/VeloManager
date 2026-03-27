@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireClubAccess } from '@/lib/club-access'
 import { ok, err } from '@/lib/utils'
-import { logAudit } from '@/lib/audit'
+import { writeAudit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
@@ -63,7 +63,7 @@ export async function POST(
     return [pmt, mov]
   })
 
-  await logAudit({
+  await writeAudit({
     userId: access.userId,
     clubId: params.clubId,
     action: 'EVENT_PAYMENT_RECORDED',
