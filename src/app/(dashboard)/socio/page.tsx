@@ -47,7 +47,7 @@ export default async function SocioDashboard() {
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title={`Bienvenido, ${(session.user as { name?: string }).name}`} clubId={clubId} />
+      <Header title={`Bienvenido, ${(session.user as { name?: string }).name}`} />
 
       <main className="flex-1 p-6 space-y-6">
         {/* Club header */}

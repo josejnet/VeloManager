@@ -7,6 +7,7 @@ import { getThemeVars } from '@/lib/themes'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { EmergencyAnnouncementModal } from '@/components/announcements/EmergencyAnnouncementModal'
 import { ClubProvider } from '@/context/ClubContext'
+import { SWRConfigProvider } from '@/components/providers/SWRConfigProvider'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions)
@@ -54,28 +55,28 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const showAnnouncementModal = !!club && role !== 'SUPER_ADMIN'
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ cssText: themeVars } as React.CSSProperties}>
-      <Sidebar
-        role={sidebarRole}
-        clubName={club?.name}
-        clubLogo={club?.logoUrl}
-        colorTheme={club?.colorTheme}
-        isAdminViewingAsSocio={isAdminViewingAsSocio}
-      />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* ClubProvider passes clubId/club data to all client pages via context,
-            eliminating the /api/clubs waterfall that every page was triggering. */}
-        {club ? (
-          <ClubProvider clubId={club.id} club={club}>
-            {children}
-          </ClubProvider>
-        ) : (
-          children
-        )}
-      </div>
+    <SWRConfigProvider>
+      <div className="flex h-screen overflow-hidden" style={{ cssText: themeVars } as React.CSSProperties}>
+        <Sidebar
+          role={sidebarRole}
+          clubName={club?.name}
+          clubLogo={club?.logoUrl}
+          colorTheme={club?.colorTheme}
+          isAdminViewingAsSocio={isAdminViewingAsSocio}
+        />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {club ? (
+            <ClubProvider clubId={club.id} club={club}>
+              {children}
+            </ClubProvider>
+          ) : (
+            children
+          )}
+        </div>
 
-      {/* Emergency/pending announcement modal — client component, polls independently */}
-      {showAnnouncementModal && <EmergencyAnnouncementModal clubId={club!.id} />}
-    </div>
+        {/* Emergency/pending announcement modal — client component, polls independently */}
+        {showAnnouncementModal && <EmergencyAnnouncementModal clubId={club!.id} />}
+      </div>
+    </SWRConfigProvider>
   )
 }

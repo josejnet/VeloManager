@@ -71,7 +71,7 @@ export default function SuperAdminBannersPage() {
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title="Gestión de Banners" clubId="" />
+      <Header title="Gestión de Banners" />
       <main className="flex-1 p-6">
         <Card>
           <CardHeader>

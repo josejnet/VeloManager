@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { useSession } from 'next-auth/react'
+import { useClub } from '@/context/ClubContext'
 import { Header } from '@/components/layout/Header'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -92,8 +92,7 @@ type ViewMode = 'calendar' | 'list'
 type ModalMode = 'create' | 'edit' | 'detail' | 'share' | null
 
 export default function AdminEventsPage() {
-  const { data: session } = useSession()
-  const [clubId, setClubId] = useState('')
+  const { clubId } = useClub()
   const [events, setEvents] = useState<ClubEvent[]>([])
   const [loading, setLoading] = useState(false)
   const [view, setView] = useState<ViewMode>('calendar')
@@ -119,17 +118,12 @@ export default function AdminEventsPage() {
   const [shareSending, setShareSending] = useState(false)
   const [shareLoading, setShareLoading] = useState(false)
 
-  useEffect(() => {
-    if (!session?.user) return
-    fetch('/api/clubs?pageSize=1')
-      .then((r) => r.json())
-      .then((d) => { if (d.data?.[0]) setClubId(d.data[0].id) })
-  }, [session])
-
   const fetchEvents = useCallback(async () => {
     if (!clubId) return
     setLoading(true)
-    const res = await fetch(`/api/clubs/${clubId}/events?pageSize=200`)
+    const from = format(startOfMonth(currentMonth), "yyyy-MM-dd")
+    const to = format(endOfMonth(currentMonth), "yyyy-MM-dd")
+    const res = await fetch(`/api/clubs/${clubId}/events?from=${from}&to=${to}&pageSize=100`)
     if (res.ok) {
       const d = await res.json()
       setEvents(d.data ?? d)
@@ -467,7 +461,7 @@ export default function AdminEventsPage() {
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title="Eventos" clubId={clubId} />
+      <Header title="Eventos" />
       <main className="flex-1 p-6 space-y-4">
 
         {/* Toolbar */}

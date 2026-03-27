@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { useSession } from 'next-auth/react'
+import { useClub } from '@/context/ClubContext'
 import { Header } from '@/components/layout/Header'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -21,8 +21,7 @@ interface CartItem {
 }
 
 export default function SocioPurchasesPage() {
-  const { data: session } = useSession()
-  const [clubId, setClubId] = useState('')
+  const { clubId } = useClub()
   const [windows, setWindows] = useState<any[]>([])
   const [myOrders, setMyOrders] = useState<any[]>([])
   const [selectedWindow, setSelectedWindow] = useState<any>(null)
@@ -45,13 +44,7 @@ export default function SocioPurchasesPage() {
     localStorage.setItem('velo_cart', JSON.stringify(cart))
   }, [cart])
 
-  useEffect(() => {
-    if (!session?.user) return
-    fetch('/api/clubs?pageSize=1').then((r) => r.json()).then((d) => { if (d.data?.[0]) setClubId(d.data[0].id) })
-  }, [session])
-
   const fetchData = useCallback(async () => {
-    if (!clubId) return
     const [wRes, oRes] = await Promise.all([
       fetch(`/api/clubs/${clubId}/purchases/windows?status=OPEN`),
       fetch(`/api/clubs/${clubId}/purchases/windows?pageSize=20`),
@@ -142,7 +135,7 @@ export default function SocioPurchasesPage() {
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title="Compras Conjuntas" clubId={clubId} />
+      <Header title="Compras Conjuntas" />
       <main className="flex-1 p-6 space-y-4">
         <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
           <button onClick={() => setTab('open')}

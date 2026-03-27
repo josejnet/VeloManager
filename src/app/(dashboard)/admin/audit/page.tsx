@@ -1,10 +1,12 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
-import { useSession } from 'next-auth/react'
+import { useState } from 'react'
+import useSWR from 'swr'
+import { useClub } from '@/context/ClubContext'
 import { Header } from '@/components/layout/Header'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Select } from '@/components/ui/Input'
 import { Pagination } from '@/components/ui/Pagination'
+import { TableSkeleton } from '@/components/ui/Skeleton'
 import { fmtDateTime } from '@/lib/utils'
 import { ShieldCheck } from 'lucide-react'
 
@@ -20,25 +22,12 @@ const ENTITY_COLORS: Record<string, string> = {
 }
 
 export default function AuditPage() {
-  const { data: session } = useSession()
-  const [clubId, setClubId] = useState('')
-  const [data, setData] = useState<any>(null)
+  const { clubId } = useClub()
   const [page, setPage] = useState(1)
   const [entityFilter, setEntityFilter] = useState('')
 
-  useEffect(() => {
-    if (!session?.user) return
-    fetch('/api/clubs?pageSize=1').then((r) => r.json()).then((d) => { if (d.data?.[0]) setClubId(d.data[0].id) })
-  }, [session])
-
-  const fetch_ = useCallback(async () => {
-    if (!clubId) return
-    const url = `/api/clubs/${clubId}/audit?page=${page}${entityFilter ? `&entity=${entityFilter}` : ''}`
-    const res = await fetch(url)
-    if (res.ok) setData(await res.json())
-  }, [clubId, page, entityFilter])
-
-  useEffect(() => { fetch_() }, [fetch_])
+  const url = `/api/clubs/${clubId}/audit?page=${page}${entityFilter ? `&entity=${entityFilter}` : ''}`
+  const { data, isLoading } = useSWR<any>(url, { keepPreviousData: true })
 
   const entityOptions = [
     { value: '', label: 'Todas las entidades' },
@@ -47,7 +36,7 @@ export default function AuditPage() {
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title="Log de Auditoría" clubId={clubId} />
+      <Header title="Log de Auditoría" />
       <main className="flex-1 p-6">
         <Card>
           <CardHeader>
@@ -69,32 +58,35 @@ export default function AuditPage() {
             Este registro es inmutable. Muestra todas las acciones relevantes en el club.
           </p>
 
-          {!data ? <p className="text-sm text-gray-400 py-8 text-center">Cargando...</p> : (
-            <div className="space-y-0 divide-y divide-gray-50">
-              {data.data?.map((log: any) => (
-                <div key={log.id} className="py-3 flex items-start gap-3">
-                  <div className={`px-2 py-0.5 rounded-md text-xs font-medium flex-shrink-0 ${ENTITY_COLORS[log.entity] ?? 'bg-gray-100 text-gray-600'}`}>
-                    {log.entity}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-900">{log.action.replaceAll('_', ' ')}</span>
-                      <span className="text-xs text-gray-400">por {log.user?.name}</span>
+          {isLoading && !data ? (
+            <TableSkeleton rows={10} cols={3} />
+          ) : (
+            <div className={`transition-opacity duration-150 ${isLoading ? 'opacity-60' : 'opacity-100'}`}>
+              <div className="space-y-0 divide-y divide-gray-50">
+                {data?.data?.map((log: any) => (
+                  <div key={log.id} className="py-3 flex items-start gap-3">
+                    <div className={`px-2 py-0.5 rounded-md text-xs font-medium flex-shrink-0 ${ENTITY_COLORS[log.entity] ?? 'bg-gray-100 text-gray-600'}`}>
+                      {log.entity}
                     </div>
-                    {log.details && (
-                      <p className="text-xs text-gray-500 mt-0.5 font-mono truncate">
-                        {JSON.stringify(log.details)}
-                      </p>
-                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-900">{log.action.replaceAll('_', ' ')}</span>
+                        <span className="text-xs text-gray-400">por {log.user?.name}</span>
+                      </div>
+                      {log.details && (
+                        <p className="text-xs text-gray-500 mt-0.5 font-mono truncate">
+                          {JSON.stringify(log.details)}
+                        </p>
+                      )}
+                    </div>
+                    <span className="text-xs text-gray-400 flex-shrink-0">{fmtDateTime(log.createdAt)}</span>
                   </div>
-                  <span className="text-xs text-gray-400 flex-shrink-0">{fmtDateTime(log.createdAt)}</span>
-                </div>
-              ))}
+                ))}
+              </div>
+              {data && (
+                <Pagination page={data.page} totalPages={data.totalPages} total={data.total} pageSize={data.pageSize} onPageChange={setPage} />
+              )}
             </div>
-          )}
-
-          {data && (
-            <Pagination page={data.page} totalPages={data.totalPages} total={data.total} pageSize={data.pageSize} onPageChange={setPage} />
           )}
         </Card>
       </main>

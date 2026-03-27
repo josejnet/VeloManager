@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
-import { useSession } from 'next-auth/react'
+import { useState, useCallback } from 'react'
+import { useClub } from '@/context/ClubContext'
 import { Header } from '@/components/layout/Header'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -26,22 +26,13 @@ interface InboxItem {
 }
 
 export default function SocioInboxPage() {
-  const { data: session } = useSession()
-  const [clubId, setClubId] = useState('')
+  const { clubId } = useClub()
   const [items, setItems] = useState<InboxItem[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(false)
   const [selectedItem, setSelectedItem] = useState<InboxItem | null>(null)
 
-  useEffect(() => {
-    if (!session?.user) return
-    fetch('/api/clubs?pageSize=1')
-      .then((r) => r.json())
-      .then((d) => { if (d.data?.[0]) setClubId(d.data[0].id) })
-  }, [session])
-
   const fetchInbox = useCallback(async () => {
-    if (!clubId) return
     setLoading(true)
     try {
       const res = await fetch(`/api/clubs/${clubId}/messages/inbox?pageSize=50`)
@@ -94,7 +85,7 @@ export default function SocioInboxPage() {
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title="Bandeja de entrada" clubId={clubId} />
+      <Header title="Bandeja de entrada" />
       <main className="flex-1 p-6">
         <Card>
           <CardHeader>

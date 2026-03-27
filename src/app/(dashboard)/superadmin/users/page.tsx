@@ -41,7 +41,7 @@ export default function SuperAdminUsersPage() {
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title="Gestión de Usuarios" clubId="" />
+      <Header title="Gestión de Usuarios" />
       <main className="flex-1 p-6">
         <Card>
           <CardHeader>

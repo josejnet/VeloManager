@@ -3,11 +3,6 @@ import { cn } from '@/lib/utils'
 /**
  * Skeleton primitives — replace "Cargando..." text with layout-preserving placeholders.
  *
- * WHY SKELETONS FEEL FASTER:
- *   1. No layout shift (CLS): the page structure is already visible.
- *   2. The shimmer animation communicates progress, not abandonment.
- *   3. Users can orient themselves before data arrives.
- *
  * USAGE:
  *   Single box:  <Skeleton className="h-4 w-32" />
  *   Table rows:  <TableSkeleton rows={5} cols={4} />
@@ -65,9 +60,20 @@ export function TableSkeleton({ rows = 8, cols = 4 }: { rows?: number; cols?: nu
 
 // ─── Stat cards ────────────────────────────────────────────────────────────
 
+// Static map avoids Tailwind JIT purging dynamic `grid-cols-${n}` classes
+const GRID_COLS: Record<number, string> = {
+  1: 'grid-cols-1',
+  2: 'grid-cols-2',
+  3: 'grid-cols-3',
+  4: 'grid-cols-4',
+  5: 'grid-cols-5',
+  6: 'grid-cols-6',
+}
+
 export function StatsSkeleton({ count = 4 }: { count?: number }) {
+  const colClass = GRID_COLS[count] ?? 'grid-cols-4'
   return (
-    <div className={`grid grid-cols-${count} gap-4`}>
+    <div className={`grid ${colClass} gap-4`}>
       {Array.from({ length: count }).map((_, i) => (
         <div key={i} className="bg-white border border-gray-100 rounded-2xl p-5 space-y-3">
           <Skeleton className="h-3 w-24" />

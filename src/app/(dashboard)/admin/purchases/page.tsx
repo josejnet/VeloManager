@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
-import { useSession } from 'next-auth/react'
+import { useState, useCallback } from 'react'
+import { useClub } from '@/context/ClubContext'
 import { Header } from '@/components/layout/Header'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -15,19 +15,12 @@ import toast from 'react-hot-toast'
 type Tab = 'windows' | 'products'
 
 export default function PurchasesPage() {
-  const { data: session } = useSession()
-  const [clubId, setClubId] = useState('')
-
-  useEffect(() => {
-    if (!session?.user) return
-    fetch('/api/clubs?pageSize=1').then((r) => r.json()).then((d) => { if (d.data?.[0]) setClubId(d.data[0].id) })
-  }, [session])
-
+  const { clubId } = useClub()
   const [tab, setTab] = useState<Tab>('windows')
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title="Compras Conjuntas" clubId={clubId} />
+      <Header title="Compras Conjuntas" />
       <main className="flex-1 p-6 space-y-4">
         <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
           <button onClick={() => setTab('windows')}

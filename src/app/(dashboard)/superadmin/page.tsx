@@ -32,7 +32,7 @@ export default async function SuperAdminPage() {
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title="Panel Super Admin" clubId="" />
+      <Header title="Panel Super Admin" />
       <main className="flex-1 p-6 space-y-6">
         <div className="grid grid-cols-4 gap-4">
           <StatCard title="Clubs activos" value={totalClubs} icon={Building2} color="blue" />

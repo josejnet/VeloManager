@@ -25,8 +25,6 @@ import { Check, X, Plus, User } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { MemberWithUser, PaginatedResponse } from '@/types'
 
-// SWR fetcher with abort support
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 const STATUSES = [
   { key: 'APPROVED', label: 'Activos' },
@@ -44,16 +42,10 @@ export default function MembersPage() {
   const [quotaForm, setQuotaForm] = useState({ year: new Date().getFullYear(), amount: '' })
   const [confirmAction, setConfirmAction] = useState<{ open: boolean; memberId: string; memberName: string; newStatus: string } | null>(null)
 
-  // SWR: caches results per (clubId, status, page).
-  // keepPreviousData: muestra datos anteriores mientras llegan los nuevos → sin parpadeo al paginar.
+  // SWR key is the full URL — enables correct cross-component invalidation via mutate(url)
   const { data, isLoading, mutate } = useSWR<PaginatedResponse<MemberWithUser>>(
-    `${clubId}/members?status=${status}&page=${page}`,
-    (key: string) => fetcher(`/api/clubs/${key}`),
-    {
-      keepPreviousData: true,        // ← datos previos visibles durante refetch
-      revalidateOnFocus: false,      // no refetch al volver a la pestaña
-      dedupingInterval: 5_000,       // deduplica llamadas en ventana de 5s
-    }
+    `/api/clubs/${clubId}/members?status=${status}&page=${page}`,
+    { keepPreviousData: true }   // global config in SWRConfigProvider handles the rest
   )
 
   const updateStatus = useCallback(async (memberId: string, newStatus: string) => {
@@ -102,7 +94,7 @@ export default function MembersPage() {
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title="Gestión de Socios" clubId={clubId} />
+      <Header title="Gestión de Socios" />
       <main className="flex-1 p-6">
         <Card>
           <CardHeader>

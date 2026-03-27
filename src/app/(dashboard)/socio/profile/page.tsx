@@ -141,7 +141,7 @@ export default function SocioProfilePage() {
   if (loading) {
     return (
       <div className="flex flex-col flex-1 overflow-auto">
-        <Header title="Mi perfil" clubId="" />
+        <Header title="Mi perfil" />
         <main className="flex-1 p-6">
           <p className="text-sm text-gray-400 text-center py-16">Cargando...</p>
         </main>
@@ -151,7 +151,7 @@ export default function SocioProfilePage() {
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title="Mi perfil" clubId="" />
+      <Header title="Mi perfil" />
       <main className="flex-1 p-6 space-y-6 max-w-2xl mx-auto w-full">
         {/* Avatar + identity */}
         <Card>

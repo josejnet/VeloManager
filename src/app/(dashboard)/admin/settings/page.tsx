@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useState } from 'react'
+import { useClub } from '@/context/ClubContext'
 import { Header } from '@/components/layout/Header'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -10,37 +10,17 @@ import { Info, Paintbrush, RotateCcw } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function SettingsPage() {
-  const { data: session } = useSession()
-  const [clubId, setClubId] = useState('')
+  const { clubId, club } = useClub()
   const [form, setForm] = useState({
-    name: '',
-    slogan: '',
-    sport: '',
-    colorTheme: 'blue',
-    logoUrl: '',
-    primaryColor: '',   // custom hex, e.g. "#2563eb"
-    secondaryColor: '', // custom hex, e.g. "#0ea5e9"
+    name: club.name ?? '',
+    slogan: club.slogan ?? '',
+    sport: club.sport ?? '',
+    colorTheme: club.colorTheme ?? 'blue',
+    logoUrl: club.logoUrl ?? '',
+    primaryColor: club.primaryColor ?? '',
+    secondaryColor: club.secondaryColor ?? '',
   })
   const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    if (!session?.user) return
-    fetch('/api/clubs?pageSize=1').then((r) => r.json()).then((d) => {
-      if (d.data?.[0]) {
-        const club = d.data[0]
-        setClubId(club.id)
-        setForm({
-          name: club.name ?? '',
-          slogan: club.slogan ?? '',
-          sport: club.sport ?? '',
-          colorTheme: club.colorTheme ?? 'blue',
-          logoUrl: club.logoUrl ?? '',
-          primaryColor: club.primaryColor ?? '',
-          secondaryColor: club.secondaryColor ?? '',
-        })
-      }
-    })
-  }, [session])
 
   const save = async () => {
     setLoading(true)
@@ -71,7 +51,7 @@ export default function SettingsPage() {
 
   return (
     <div className="flex flex-col flex-1 overflow-auto" style={{ cssText: previewVars } as React.CSSProperties}>
-      <Header title="Configuración del Club" clubId={clubId} />
+      <Header title="Configuración del Club" />
       <main className="flex-1 p-6 space-y-6">
 
         {/* ── Basic info ─────────────────────────────────────────────────── */}

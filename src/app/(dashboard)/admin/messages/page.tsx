@@ -1,6 +1,7 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
-import { useSession } from 'next-auth/react'
+import { useState, useCallback } from 'react'
+import useSWR from 'swr'
+import { useClub } from '@/context/ClubContext'
 import { Header } from '@/components/layout/Header'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -13,25 +14,15 @@ import { Send, Plus, Users, Mail } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function MessagesAdminPage() {
-  const { data: session } = useSession()
-  const [clubId, setClubId] = useState('')
-  const [data, setData] = useState<any>(null)
+  const { clubId } = useClub()
   const [page, setPage] = useState(1)
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState({ subject: '', body: '', targetRole: 'SOCIO', sendEmail: true })
 
-  useEffect(() => {
-    if (!session?.user) return
-    fetch('/api/clubs?pageSize=1').then((r) => r.json()).then((d) => { if (d.data?.[0]) setClubId(d.data[0].id) })
-  }, [session])
-
-  const fetch_ = useCallback(async () => {
-    if (!clubId) return
-    const res = await fetch(`/api/clubs/${clubId}/messages?page=${page}`)
-    if (res.ok) setData(await res.json())
-  }, [clubId, page])
-
-  useEffect(() => { fetch_() }, [fetch_])
+  const { data, mutate } = useSWR<any>(
+    `/api/clubs/${clubId}/messages?page=${page}`,
+    { keepPreviousData: true }
+  )
 
   const send = async () => {
     if (!form.subject || !form.body) return toast.error('Asunto y mensaje son obligatorios')
@@ -43,7 +34,7 @@ export default function MessagesAdminPage() {
       toast.success(`Mensaje enviado a ${d._count?.recipients ?? 0} destinatarios`)
       setModal(false)
       setForm({ subject: '', body: '', targetRole: 'SOCIO', sendEmail: true })
-      fetch_()
+      mutate()
     } else {
       const d = await res.json(); toast.error(d.error ?? 'Error')
     }
@@ -51,7 +42,7 @@ export default function MessagesAdminPage() {
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title="Mensajería interna" clubId={clubId} />
+      <Header title="Mensajería interna" />
       <main className="flex-1 p-6">
         <Card>
           <CardHeader>

@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { useSession } from 'next-auth/react'
+import { useClub } from '@/context/ClubContext'
 import { Header } from '@/components/layout/Header'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { fmtCurrency } from '@/lib/utils'
@@ -135,22 +135,13 @@ function StatCard({ title, value, icon, color }: StatCardProps) {
 }
 
 export default function AccountingReportsPage() {
-  const { data: session } = useSession()
-  const [clubId, setClubId] = useState('')
+  const { clubId } = useClub()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [debtMembers, setDebtMembers] = useState<DebtMember[]>([])
   const [pendingQuotasTotal, setPendingQuotasTotal] = useState(0)
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    if (!session?.user) return
-    fetch('/api/clubs?pageSize=1')
-      .then((r) => r.json())
-      .then((d) => { if (d.data?.[0]) setClubId(d.data[0].id) })
-  }, [session])
-
   const fetchData = useCallback(async () => {
-    if (!clubId) return
     setLoading(true)
     try {
       const [bankRes, debtRes] = await Promise.all([
@@ -183,7 +174,7 @@ export default function AccountingReportsPage() {
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title="Informes financieros" clubId={clubId} />
+      <Header title="Informes financieros" />
       <main className="flex-1 p-6 space-y-6">
         {loading && (
           <p className="text-sm text-gray-400 text-center py-4">Cargando datos...</p>
