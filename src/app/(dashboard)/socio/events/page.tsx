@@ -196,8 +196,7 @@ export default function SocioEventsPage() {
       const res = await fetch(`/api/clubs/${clubId}/events/${ev.id}/share`, { method: 'POST' })
       if (res.ok) {
         const d = await res.json()
-        const token = d.shareToken ?? d.token ?? ''
-        setShareLink(token ? `${window.location.origin}/events/shared/${token}` : '')
+        setShareLink(d.shareUrl ?? (d.shareToken ? `${window.location.origin}/events/${d.shareToken}` : ''))
       }
     } finally {
       setShareLoading(false)

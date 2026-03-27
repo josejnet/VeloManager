@@ -202,7 +202,7 @@ export default function AdminEventsPage() {
       const res = await fetch(`/api/clubs/${clubId}/events/${ev.id}/share`, { method: 'POST' })
       if (res.ok) {
         const d = await res.json()
-        setShareLink(d.shareUrl ?? d.url ?? `${window.location.origin}/events/share/${d.shareToken}`)
+        setShareLink(d.shareUrl ?? (d.shareToken ? `${window.location.origin}/events/${d.shareToken}` : ''))
       } else {
         toast.error('No se pudo obtener el enlace')
       }
