@@ -76,7 +76,7 @@ interface EventPayment {
   status: PaymentStatus
   paidAt: string | null
   createdAt: string
-  user: { id: string; name: string | null; email: string; image: string | null }
+  user: { id: string; name: string | null; email: string; avatarUrl: string | null }
 }
 
 interface Attachment {

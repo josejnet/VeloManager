@@ -23,7 +23,7 @@ export async function GET(
   const payments = await prisma.eventPayment.findMany({
     where: { eventId: params.eventId },
     include: {
-      user: { select: { id: true, name: true, email: true, image: true } },
+      user: { select: { id: true, name: true, email: true, avatarUrl: true } },
     },
     orderBy: { createdAt: 'asc' },
   })
