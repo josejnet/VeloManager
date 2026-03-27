@@ -1,6 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
+import { unstable_cache } from 'next/cache'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getThemeVars } from '@/lib/themes'
@@ -8,6 +9,31 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { EmergencyAnnouncementModal } from '@/components/announcements/EmergencyAnnouncementModal'
 import { ClubProvider } from '@/context/ClubContext'
 import { SWRConfigProvider } from '@/components/providers/SWRConfigProvider'
+
+const getMembership = unstable_cache(
+  async (userId: string) =>
+    prisma.clubMembership.findFirst({
+      where: { userId, status: 'APPROVED' },
+      orderBy: { joinedAt: 'asc' },
+      select: {
+        role: true,
+        club: {
+          select: {
+            id: true,
+            name: true,
+            slogan: true,
+            sport: true,
+            logoUrl: true,
+            colorTheme: true,
+            primaryColor: true,
+            secondaryColor: true,
+          },
+        },
+      },
+    }),
+  ['layout-membership'],
+  { revalidate: 300, tags: ['layout-membership'] },
+)
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions)
@@ -20,11 +46,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   let membershipRole: 'CLUB_ADMIN' | 'SOCIO' | null = null
 
   if (role !== 'SUPER_ADMIN') {
-    const membership = await prisma.clubMembership.findFirst({
-      where: { userId, status: 'APPROVED' },
-      orderBy: { joinedAt: 'asc' },
-      include: { club: true },
-    })
+    const membership = await getMembership(userId)
     if (membership) {
       club = membership.club
       membershipRole = membership.role as 'CLUB_ADMIN' | 'SOCIO'

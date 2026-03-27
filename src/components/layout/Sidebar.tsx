@@ -121,6 +121,7 @@ export function Sidebar({ role, clubName, clubLogo, colorTheme, isAdminViewingAs
             <Link
               key={item.href}
               href={item.href}
+              prefetch={true}
               className={cn('sidebar-item', active && 'active')}
             >
               <item.icon className="h-4 w-4 flex-shrink-0" />
