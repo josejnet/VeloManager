@@ -13,6 +13,7 @@ const PatchEventSchema = z.object({
   endAt: z.string().nullable().optional(),
   allDay: z.boolean().optional(),
   maxAttendees: z.number().int().positive().nullable().optional(),
+  price: z.number().positive().nullable().optional(),
   imageUrl: z.string().url().nullable().optional(),
   published: z.boolean().optional(),
 })

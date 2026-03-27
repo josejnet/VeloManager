@@ -859,6 +859,7 @@ model ClubEvent {
   endAt        DateTime?
   allDay       Boolean   @default(false)
   maxAttendees Int?
+  price        Decimal?  @db.Decimal(14, 2)  // null = free; set = requires EventPayment
   imageUrl     String?
   published    Boolean   @default(true)
   shareToken   String?   @unique  // for public share links

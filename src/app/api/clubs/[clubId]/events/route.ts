@@ -13,6 +13,7 @@ const CreateEventSchema = z.object({
   endAt: z.string().optional().nullable(),
   allDay: z.boolean().default(false),
   maxAttendees: z.number().int().positive().optional().nullable(),
+  price: z.number().positive().optional().nullable(),  // null = free event
   imageUrl: z.string().url().optional().nullable(),
   published: z.boolean().default(true),
 })
@@ -78,6 +79,7 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
       endAt: parsed.data.endAt ? new Date(parsed.data.endAt) : null,
       allDay: parsed.data.allDay,
       maxAttendees: parsed.data.maxAttendees ?? null,
+      price: parsed.data.price ?? null,
       imageUrl: parsed.data.imageUrl ?? null,
       published: parsed.data.published,
     },
