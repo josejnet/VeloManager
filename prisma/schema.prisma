@@ -74,9 +74,10 @@ enum PurchaseWindowStatus {
 }
 
 enum OrderStatus {
-  PENDING
-  CONFIRMED
-  DELIVERED
+  PENDING       // placed, awaiting payment
+  PAID          // payment received — triggers BankMovement
+  CONFIRMED     // admin confirmed/preparing
+  DELIVERED     // physically delivered to member
   CANCELLED
 }
 

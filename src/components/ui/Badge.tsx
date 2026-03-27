@@ -38,6 +38,8 @@ export function MemberStatusBadge({ status }: { status: string }) {
     PENDING: { label: 'Pendiente', variant: 'warning' },
     REJECTED: { label: 'Rechazado', variant: 'danger' },
     SUSPENDED: { label: 'Suspendido', variant: 'default' },
+    BANNED: { label: 'Baneado', variant: 'danger' },
+    LEFT: { label: 'Salió', variant: 'default' },
   }
   const { label, variant } = map[status] ?? { label: status, variant: 'default' }
   return <Badge variant={variant}>{label}</Badge>
@@ -55,9 +57,10 @@ export function QuotaStatusBadge({ status }: { status: string }) {
 
 export function OrderStatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; variant: BadgeVariant }> = {
-    PENDING: { label: 'Pendiente', variant: 'warning' },
+    PENDING: { label: 'Pend. pago', variant: 'warning' },
+    PAID: { label: 'Pagado', variant: 'success' },
     CONFIRMED: { label: 'Confirmado', variant: 'info' },
-    DELIVERED: { label: 'Entregado', variant: 'success' },
+    DELIVERED: { label: 'Entregado', variant: 'purple' },
     CANCELLED: { label: 'Cancelado', variant: 'danger' },
   }
   const { label, variant } = map[status] ?? { label: status, variant: 'default' }
