@@ -11,6 +11,8 @@ const UpdateClubSchema = z.object({
   sport: z.string().optional(),
   colorTheme: z.string().optional(),
   logoUrl: z.string().url().optional().nullable(),
+  primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().nullable(),
+  secondaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().nullable(),
 })
 
 // GET /api/clubs/[clubId]

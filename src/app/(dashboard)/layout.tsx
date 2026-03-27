@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getThemeVars } from '@/lib/themes'
 import { Sidebar } from '@/components/layout/Sidebar'
+import { EmergencyAnnouncementModal } from '@/components/announcements/EmergencyAnnouncementModal'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions)
@@ -41,7 +42,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
       ? 'SOCIO'
       : (membershipRole ?? 'SOCIO')
 
-  const themeVars = getThemeVars(club?.colorTheme ?? 'blue')
+  // ── Branding: custom hex colors override the predefined theme palette ──────
+  const themeVars = getThemeVars(
+    club?.colorTheme ?? 'blue',
+    club?.primaryColor,
+    club?.secondaryColor,
+  )
+
+  // Show the emergency modal whenever the user is in a club context
+  const showAnnouncementModal = !!club && role !== 'SUPER_ADMIN'
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ cssText: themeVars } as React.CSSProperties}>
@@ -55,6 +64,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <div className="flex-1 flex flex-col overflow-hidden">
         {children}
       </div>
+
+      {/* Emergency/pending announcement modal — client component, polls independently */}
+      {showAnnouncementModal && <EmergencyAnnouncementModal clubId={club!.id} />}
     </div>
   )
 }

@@ -95,6 +95,11 @@ enum AttendeeStatus {
   MAYBE
 }
 
+enum AnnouncementPriority {
+  NORMAL
+  EMERGENCY
+}
+
 // ─── Core: Users & Auth ───────────────────────────────────────────────────────
 
 model User {
@@ -122,6 +127,7 @@ model User {
   receivedMessages    ClubMessageRecipient[]
   passwordResets      PasswordReset[]
   eventAttendances    EventAttendee[]
+  announcementReads   AnnouncementRead[]
 
   @@index([email])
   @@index([role])
@@ -165,8 +171,10 @@ model Club {
   name        String
   slogan      String?
   sport       String   // from Sports master table
-  colorTheme  String   @default("blue")
-  logoUrl     String?
+  colorTheme     String   @default("blue")
+  logoUrl        String?
+  primaryColor   String?  // custom hex override e.g. "#2563eb"
+  secondaryColor String?  // custom hex override
   active      Boolean  @default(true)
   // Location metadata (for announcement segmentation)
   province    String?
@@ -196,6 +204,7 @@ model Club {
   invoices          Invoice[]
   messages          ClubMessage[]
   clubAnnouncements ClubAnnouncement[]
+  announcementReads AnnouncementRead[]
   sharedFiles       SharedFile[]
   subscription      ClubSubscription?
   moduleAccess      ClubModuleAccess[]
@@ -558,24 +567,47 @@ model MessageEmailLog {
 // ─── Anuncios del Club (Admin → Socios) ──────────────────────────────────
 
 model ClubAnnouncement {
-  id         String    @id @default(cuid())
-  clubId     String
-  authorId   String    // ClubAdmin who created it
-  title      String
-  body       String    @db.Text
-  imageUrl   String?
-  pinned     Boolean   @default(false)
-  publishAt  DateTime  @default(now())
-  expiresAt  DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id                   String               @id @default(cuid())
+  clubId               String
+  authorId             String               // ClubAdmin who created it
+  title                String
+  body                 String               @db.Text
+  imageUrl             String?
+  pinned               Boolean              @default(false)
+  priority             AnnouncementPriority @default(NORMAL)
+  requiresConfirmation Boolean              @default(false)
+  // Segmentation: null = all members, set = only attendees of that event
+  targetEventId        String?
+  publishAt            DateTime             @default(now())
+  expiresAt            DateTime?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
 
-  club        Club         @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  club        Club              @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  targetEvent ClubEvent?        @relation(fields: [targetEventId], references: [id])
   sharedFiles SharedFile[]
+  reads       AnnouncementRead[]
 
   @@index([clubId, publishAt(sort: Desc)])
   @@index([clubId, pinned])
+  @@index([clubId, priority])
   @@index([clubId, expiresAt])
+}
+
+model AnnouncementRead {
+  id             String   @id @default(cuid())
+  announcementId String
+  userId         String
+  clubId         String   // denormalized for isolation queries
+  confirmedAt    DateTime @default(now())
+
+  announcement ClubAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club         Club             @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, userId])
+  @@index([announcementId])
+  @@index([userId, clubId])
 }
 
 model SharedFile {
@@ -746,9 +778,10 @@ model ClubEvent {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  club        Club                @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  attendees   EventAttendee[]
-  attachments EventAttachment[]
+  club          Club                @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  attendees     EventAttendee[]
+  attachments   EventAttachment[]
+  announcements ClubAnnouncement[]
 
   @@index([clubId, startAt])
   @@index([clubId, published])
