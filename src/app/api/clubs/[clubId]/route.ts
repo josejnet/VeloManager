@@ -11,6 +11,13 @@ const UpdateClubSchema = z.object({
   sport: z.string().optional(),
   colorTheme: z.string().optional(),
   logoUrl: z.string().url().optional().nullable(),
+  // Access control
+  visibility: z.enum(['PUBLIC', 'PRIVATE', 'HIDDEN']).optional(),
+  joinPolicy: z.enum(['OPEN', 'REQUEST', 'INVITE_ONLY']).optional(),
+  autoApprove: z.boolean().optional(),
+  inviteLinksEnabled: z.boolean().optional(),
+  defaultInviteExpiryDays: z.number().int().min(1).max(365).nullable().optional(),
+  defaultInviteMaxUses: z.number().int().min(1).max(10000).nullable().optional(),
 })
 
 // GET /api/clubs/[clubId]

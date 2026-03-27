@@ -25,6 +25,34 @@ enum MembershipStatus {
   APPROVED
   REJECTED
   SUSPENDED
+  BANNED       // expelled with permanent block — can only be lifted by admin
+  LEFT         // voluntary departure — may rejoin if club policy allows
+}
+
+enum ClubVisibility {
+  PUBLIC       // appears in directory, anyone can request
+  PRIVATE      // appears in directory, requires invitation or approved request
+  HIDDEN       // not in directory, only accessible via direct link/code
+}
+
+enum JoinPolicy {
+  OPEN         // auto-approved on request
+  REQUEST      // request + manual admin approval
+  INVITE_ONLY  // only users with a valid invitation can join
+}
+
+enum InvitationStatus {
+  PENDING      // sent, not yet used
+  ACCEPTED     // used, membership created
+  EXPIRED      // expiresAt passed without use
+  REVOKED      // manually cancelled by admin
+  REJECTED     // explicitly declined by the recipient
+}
+
+enum InvitationChannel {
+  EMAIL        // direct invitation to a specific email
+  LINK         // shareable public link
+  CODE         // short alphanumeric access code
 }
 
 enum TransactionType {
@@ -122,6 +150,9 @@ model User {
   receivedMessages    ClubMessageRecipient[]
   passwordResets      PasswordReset[]
   eventAttendances    EventAttendee[]
+  createdInvitations  ClubInvitation[]      @relation("InvitationCreator")
+  targetedInvitations ClubInvitation[]      @relation("InvitationTarget")
+  acceptedInvitations ClubInvitation[]      @relation("InvitationAcceptor")
 
   @@index([email])
   @@index([role])
@@ -179,6 +210,13 @@ model Club {
   // Description shown on public club page
   description  String?
   foundedYear  Int?
+  // Access control
+  visibility              ClubVisibility @default(PUBLIC)
+  joinPolicy              JoinPolicy     @default(REQUEST)
+  autoApprove             Boolean        @default(false)
+  inviteLinksEnabled      Boolean        @default(true)
+  defaultInviteExpiryDays Int?           @default(7)
+  defaultInviteMaxUses    Int?           @default(1)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -201,6 +239,7 @@ model Club {
   moduleAccess      ClubModuleAccess[]
   events            ClubEvent[]
   customRoles       ClubCustomRole[]
+  invitations       ClubInvitation[]
 
   @@index([active])
   @@index([sport])
@@ -217,6 +256,14 @@ model ClubMembership {
   status    MembershipStatus @default(PENDING)
   role      UserRole         @default(SOCIO)
   joinedAt  DateTime?
+  // Ban tracking
+  bannedAt      DateTime?
+  bannedById    String?
+  bannedReason  String?
+  // Voluntary departure
+  leftAt        DateTime?
+  // Invitation that originated this membership (null = direct request)
+  invitationId  String?
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
 
@@ -224,11 +271,64 @@ model ClubMembership {
   club        Club                   @relation(fields: [clubId], references: [id], onDelete: Cascade)
   quotas      MemberQuota[]
   customRoles ClubMemberCustomRole[]
+  invitation  ClubInvitation?        @relation(fields: [invitationId], references: [id])
 
   @@unique([userId, clubId])
   @@index([clubId, status])          // most common query: list members of club by status
   @@index([userId])                  // all clubs a user belongs to
   @@index([clubId, role])
+  @@index([invitationId])
+}
+
+// ─── Club Invitations ─────────────────────────────────────────────────────
+
+model ClubInvitation {
+  id              String            @id @default(cuid())
+  clubId          String
+
+  invitedById     String            // userId of the admin who created the invitation
+
+  // Target (null = generic link/code)
+  invitedEmail    String?           // for direct email invitations
+  invitedUserId   String?           // if the target user already exists in the platform
+
+  // Token — always present regardless of channel
+  token           String            @unique  // crypto.randomBytes(32).toString('hex')
+
+  channel         InvitationChannel @default(EMAIL)
+  status          InvitationStatus  @default(PENDING)
+
+  // Role assigned upon joining
+  assignedRole    UserRole          @default(SOCIO)
+
+  // Usage control
+  maxUses         Int?              // null = single use (email default); >1 for links
+  usesCount       Int               @default(0)
+
+  // Expiry
+  expiresAt       DateTime?
+
+  // Traceability
+  acceptedAt        DateTime?
+  acceptedByUserId  String?
+  revokedAt         DateTime?
+  revokedById       String?
+  note              String?         // internal admin note, not shown to recipient
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  club            Club              @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  invitedBy       User              @relation("InvitationCreator", fields: [invitedById], references: [id])
+  invitedUser     User?             @relation("InvitationTarget", fields: [invitedUserId], references: [id])
+  acceptedBy      User?             @relation("InvitationAcceptor", fields: [acceptedByUserId], references: [id])
+  memberships     ClubMembership[]
+
+  @@index([clubId, status])
+  @@index([token])
+  @@index([invitedEmail])
+  @@index([clubId, channel, status])
+  @@index([expiresAt])
 }
 
 // ─── Accounting / Banking ─────────────────────────────────────────────────

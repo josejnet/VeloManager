@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { signIn } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
@@ -10,6 +10,8 @@ import toast from 'react-hot-toast'
 
 export default function RegisterPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const inviteToken = searchParams.get('invite')
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' })
 
@@ -33,7 +35,8 @@ export default function RegisterPage() {
 
     toast.success('Cuenta creada. Iniciando sesión...')
     await signIn('credentials', { email: form.email, password: form.password, redirect: false })
-    router.push('/')
+    // If came from an invite link, redirect back to it so they can accept
+    router.push(inviteToken ? `/invite/${inviteToken}` : '/')
   }
 
   return (
