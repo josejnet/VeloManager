@@ -7,6 +7,8 @@ import { getThemeVars } from '@/lib/themes'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { DashboardProvider } from '@/providers/DashboardProvider'
 import type { DashboardContextValue } from '@/providers/DashboardProvider'
+import { ClubProvider } from '@/context/ClubContext'
+import type { ClubData } from '@/context/ClubContext'
 
 interface ClubLayoutProps {
   children: React.ReactNode
@@ -93,7 +95,18 @@ export default async function ClubLayout({ children, params }: ClubLayoutProps) 
   const baseHref = `/clubs/${clubId}`
   const themeVars = getThemeVars(club?.colorTheme ?? 'blue')
 
-  return (
+  const clubData: ClubData | null = club ? {
+    id: club.id,
+    name: club.name,
+    slogan: club.slogan ?? null,
+    sport: club.sport,
+    logoUrl: club.logoUrl ?? null,
+    colorTheme: club.colorTheme,
+    primaryColor: (club as any).primaryColor ?? null,
+    secondaryColor: (club as any).secondaryColor ?? null,
+  } : null
+
+  const layout = (
     <DashboardProvider value={contextValue}>
       <div className="flex h-screen overflow-hidden" style={{ cssText: themeVars } as React.CSSProperties}>
         <Sidebar
@@ -111,4 +124,10 @@ export default async function ClubLayout({ children, params }: ClubLayoutProps) 
       </div>
     </DashboardProvider>
   )
+
+  return clubData ? (
+    <ClubProvider clubId={clubData.id} club={clubData}>
+      {layout}
+    </ClubProvider>
+  ) : layout
 }
