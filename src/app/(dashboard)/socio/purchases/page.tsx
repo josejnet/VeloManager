@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { useSession } from 'next-auth/react'
+import { useClub } from '@/context/ClubContext'
 import { Header } from '@/components/layout/Header'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -9,6 +9,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Select } from '@/components/ui/Input'
 import { fmtCurrency, fmtDate } from '@/lib/utils'
 import { ShoppingCart, Package, Plus, Minus, Trash2 } from 'lucide-react'
+import { AdSlot } from '@/components/ads/AdSlot'
 import toast from 'react-hot-toast'
 
 interface CartItem {
@@ -21,8 +22,7 @@ interface CartItem {
 }
 
 export default function SocioPurchasesPage() {
-  const { data: session } = useSession()
-  const [clubId, setClubId] = useState('')
+  const { clubId } = useClub()
   const [windows, setWindows] = useState<any[]>([])
   const [myOrders, setMyOrders] = useState<any[]>([])
   const [selectedWindow, setSelectedWindow] = useState<any>(null)
@@ -30,6 +30,7 @@ export default function SocioPurchasesPage() {
   const [cartOpen, setCartOpen] = useState(false)
   const [tab, setTab] = useState<'open' | 'orders'>('open')
   const [placingOrder, setPlacingOrder] = useState(false)
+  const [orderConfirmed, setOrderConfirmed] = useState(false)
 
   // Persist cart to localStorage to survive page reloads
   useEffect(() => {
@@ -45,13 +46,7 @@ export default function SocioPurchasesPage() {
     localStorage.setItem('velo_cart', JSON.stringify(cart))
   }, [cart])
 
-  useEffect(() => {
-    if (!session?.user) return
-    fetch('/api/clubs?pageSize=1').then((r) => r.json()).then((d) => { if (d.data?.[0]) setClubId(d.data[0].id) })
-  }, [session])
-
   const fetchData = useCallback(async () => {
-    if (!clubId) return
     const [wRes, oRes] = await Promise.all([
       fetch(`/api/clubs/${clubId}/purchases/windows?status=OPEN`),
       fetch(`/api/clubs/${clubId}/purchases/windows?pageSize=20`),
@@ -64,23 +59,11 @@ export default function SocioPurchasesPage() {
 
   const fetchMyOrders = useCallback(async () => {
     if (!clubId) return
-    // Fetch all windows then retrieve current user's orders from each.
-    // The orders endpoint now correctly filters by userId for SOCIOs.
-    const wRes = await fetch(`/api/clubs/${clubId}/purchases/windows?pageSize=50`)
-    if (!wRes.ok) return
-    const wData = await wRes.json()
-    const allWindows: any[] = wData.data ?? []
-    // Fetch orders in parallel instead of sequentially for better performance
-    const results = await Promise.allSettled(
-      allWindows.map((w) =>
-        fetch(`/api/clubs/${clubId}/purchases/windows/${w.id}/orders`)
-          .then((r) => r.ok ? r.json() : { data: [] })
-          .then((d) => (d.data ?? []).map((o: any) => ({ ...o, windowName: w.name })))
-          .catch(() => [])
-      )
-    )
-    const orders = results.flatMap((r) => r.status === 'fulfilled' ? r.value : [])
-    setMyOrders(orders)
+    const res = await fetch(`/api/clubs/${clubId}/orders?pageSize=50`)
+    if (res.ok) {
+      const d = await res.json()
+      setMyOrders(d.data ?? [])
+    }
   }, [clubId])
 
   useEffect(() => { fetchData(); fetchMyOrders() }, [fetchData, fetchMyOrders])
@@ -132,7 +115,7 @@ export default function SocioPurchasesPage() {
       toast.success('Pedido confirmado')
       setCart([])
       localStorage.removeItem('velo_cart')
-      setCartOpen(false)
+      setOrderConfirmed(true)
       fetchMyOrders()
     } else {
       const d = await res.json()
@@ -142,7 +125,7 @@ export default function SocioPurchasesPage() {
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title="Compras Conjuntas" clubId={clubId} />
+      <Header title="Compras Conjuntas" />
       <main className="flex-1 p-6 space-y-4">
         <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
           <button onClick={() => setTab('open')}
@@ -178,8 +161,8 @@ export default function SocioPurchasesPage() {
                     {w.products?.map(({ product }: any) => (
                       <div key={product.id} className="border border-gray-100 rounded-xl overflow-hidden">
                         <div className="h-32 bg-gray-50 flex items-center justify-center">
-                          {product.imageUrl
-                            ? <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+                          {product.images?.[0]
+                            ? <img src={product.images?.[0]} alt={product.name} className="h-full w-full object-cover" />
                             : <Package className="h-8 w-8 text-gray-300" />}
                         </div>
                         <div className="p-3">
@@ -209,7 +192,7 @@ export default function SocioPurchasesPage() {
                   <div key={order.id} className="border border-gray-100 rounded-xl p-4">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="font-semibold text-gray-900">{order.windowName}</p>
+                        <p className="font-semibold text-gray-900">{order.purchaseWindow?.name}</p>
                         <p className="text-xs text-gray-400">{fmtDate(order.createdAt)}</p>
                         <div className="mt-2 space-y-1">
                           {order.items?.map((item: any) => (
@@ -233,8 +216,18 @@ export default function SocioPurchasesPage() {
       </main>
 
       {/* Cart modal */}
-      <Modal open={cartOpen} onClose={() => setCartOpen(false)} title={`Carrito — ${selectedWindow?.name}`} size="lg">
-        {selectedWindow && (
+      <Modal open={cartOpen} onClose={() => { setCartOpen(false); setOrderConfirmed(false) }} title={orderConfirmed ? '¡Pedido confirmado!' : `Carrito — ${selectedWindow?.name}`} size="lg">
+        {/* Checkout ad slot — shown only after order confirmation */}
+        {orderConfirmed && (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600 text-center">Tu pedido ha sido registrado. El club te contactará para la entrega y el pago.</p>
+            <AdSlot clubId={clubId} placement="CHECKOUT" />
+            <div className="flex justify-center pt-2">
+              <Button onClick={() => { setCartOpen(false); setOrderConfirmed(false) }}>Cerrar</Button>
+            </div>
+          </div>
+        )}
+        {selectedWindow && !orderConfirmed && (
           <div className="space-y-4">
             {/* Product selector */}
             <div>
@@ -244,8 +237,8 @@ export default function SocioPurchasesPage() {
                   <button key={product.id} onClick={() => addToCart(product)}
                     className="flex items-center gap-2 p-2.5 border border-gray-100 rounded-xl hover:bg-gray-50 text-left">
                     <div className="h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      {product.imageUrl
-                        ? <img src={product.imageUrl} alt="" className="h-10 w-10 rounded-lg object-cover" />
+                      {product.images?.[0]
+                        ? <img src={product.images?.[0]} alt="" className="h-10 w-10 rounded-lg object-cover" />
                         : <Package className="h-5 w-5 text-gray-300" />}
                     </div>
                     <div>

@@ -97,15 +97,17 @@ async function main() {
       },
     })
 
-    const bank = await prisma.bankAccount.create({ data: { clubId: club.id, balance: 4850 } })
+    // BankAccount — no stored balance; computed from BankMovements
+    await prisma.bankAccount.create({ data: { clubId: club.id, bankName: 'Banco Demo', holder: 'Velo CC' } })
 
-    const [cuotas, patrocinios, material, instalaciones, viajes, inscripciones] = await Promise.all([
-      prisma.incomeCategory.create({ data: { clubId: club.id, name: 'Cuotas' } }),
-      prisma.incomeCategory.create({ data: { clubId: club.id, name: 'Patrocinios' } }),
-      prisma.expenseCategory.create({ data: { clubId: club.id, name: 'Material deportivo' } }),
-      prisma.expenseCategory.create({ data: { clubId: club.id, name: 'Instalaciones' } }),
-      prisma.expenseCategory.create({ data: { clubId: club.id, name: 'Viajes y desplazamientos' } }),
-      prisma.incomeCategory.create({ data: { clubId: club.id, name: 'Inscripciones' } }),
+    // Unified LedgerCategories (income + expense)
+    const [cuotas, patrocinios, inscripciones, material, instalaciones, viajes] = await Promise.all([
+      prisma.ledgerCategory.create({ data: { clubId: club.id, name: 'Cuotas',                  type: 'INCOME',  color: '#10b981' } }),
+      prisma.ledgerCategory.create({ data: { clubId: club.id, name: 'Patrocinios',              type: 'INCOME',  color: '#3b82f6' } }),
+      prisma.ledgerCategory.create({ data: { clubId: club.id, name: 'Inscripciones',            type: 'INCOME',  color: '#8b5cf6' } }),
+      prisma.ledgerCategory.create({ data: { clubId: club.id, name: 'Material deportivo',       type: 'EXPENSE', color: '#ef4444' } }),
+      prisma.ledgerCategory.create({ data: { clubId: club.id, name: 'Instalaciones',            type: 'EXPENSE', color: '#f59e0b' } }),
+      prisma.ledgerCategory.create({ data: { clubId: club.id, name: 'Viajes y desplazamientos', type: 'EXPENSE', color: '#06b6d4' } }),
     ])
 
     // ── 50 socios ───────────────────────────────────────────────────────────
@@ -160,7 +162,7 @@ async function main() {
       )
     )
 
-    // Cuotas 2026 (approved socios)
+    // Cuotas 2026 (approved socios) — with dueDate
     const approvedMemberships = socioMemberships.filter((_, i) => i < 45)
     await prisma.memberQuota.createMany({
       skipDuplicates: true,
@@ -170,44 +172,46 @@ async function main() {
         year: 2026,
         amount: 120,
         status: i < 38 ? 'PAID' : 'PENDING',
+        dueDate: new Date('2026-03-31'),  // Q1 deadline
+        paidAt: i < 38 ? new Date('2026-01-15') : undefined,
       })),
     })
 
-    // ── Transactions: 6 months Oct 2025 – Mar 2026 ─────────────────────────
-    await prisma.transaction.createMany({
+    // ── BankMovements: 6 months Oct 2025 – Mar 2026 (append-only ledger) ──────
+    await prisma.bankMovement.createMany({
       data: [
         // Oct 2025
-        { bankAccountId: bank.id, clubId: club!.id, type: 'INCOME', amount: 1200, description: 'Patrocinio Ciclotienda Pro', date: new Date('2025-10-05'), incomeCategoryId: patrocinios.id },
-        { bankAccountId: bank.id, clubId: club!.id, type: 'INCOME', amount: 2400, description: 'Cuotas octubre 2025 (20 socios)', date: new Date('2025-10-10'), incomeCategoryId: cuotas.id },
-        { bankAccountId: bank.id, clubId: club!.id, type: 'EXPENSE', amount: 350, description: 'Alquiler vestuarios octubre', date: new Date('2025-10-20'), expenseCategoryId: instalaciones.id },
-        { bankAccountId: bank.id, clubId: club!.id, type: 'EXPENSE', amount: 480, description: 'Cascos y gafas de repuesto', date: new Date('2025-10-25'), expenseCategoryId: material.id },
+        { clubId: club!.id, type: 'INCOME',  amount: 1200, description: 'Patrocinio Ciclotienda Pro',             date: new Date('2025-10-05'), categoryId: patrocinios.id,  source: 'MANUAL' },
+        { clubId: club!.id, type: 'INCOME',  amount: 2400, description: 'Cuotas octubre 2025 (20 socios)',        date: new Date('2025-10-10'), categoryId: cuotas.id,       source: 'MANUAL' },
+        { clubId: club!.id, type: 'EXPENSE', amount: 350,  description: 'Alquiler vestuarios octubre',            date: new Date('2025-10-20'), categoryId: instalaciones.id, source: 'MANUAL' },
+        { clubId: club!.id, type: 'EXPENSE', amount: 480,  description: 'Cascos y gafas de repuesto',             date: new Date('2025-10-25'), categoryId: material.id,     source: 'MANUAL' },
         // Nov 2025
-        { bankAccountId: bank.id, clubId: club!.id, type: 'INCOME', amount: 2640, description: 'Cuotas noviembre 2025 (22 socios)', date: new Date('2025-11-05'), incomeCategoryId: cuotas.id },
-        { bankAccountId: bank.id, clubId: club!.id, type: 'INCOME', amount: 600, description: 'Inscripción carrera popular', date: new Date('2025-11-08'), incomeCategoryId: inscripciones.id },
-        { bankAccountId: bank.id, clubId: club!.id, type: 'EXPENSE', amount: 890, description: 'Equipación invierno (mallots térmicos)', date: new Date('2025-11-15'), expenseCategoryId: material.id },
-        { bankAccountId: bank.id, clubId: club!.id, type: 'EXPENSE', amount: 350, description: 'Alquiler vestuarios noviembre', date: new Date('2025-11-20'), expenseCategoryId: instalaciones.id },
-        { bankAccountId: bank.id, clubId: club!.id, type: 'EXPENSE', amount: 240, description: 'Transporte a carrera La Rioja', date: new Date('2025-11-22'), expenseCategoryId: viajes.id },
+        { clubId: club!.id, type: 'INCOME',  amount: 2640, description: 'Cuotas noviembre 2025 (22 socios)',      date: new Date('2025-11-05'), categoryId: cuotas.id,       source: 'MANUAL' },
+        { clubId: club!.id, type: 'INCOME',  amount: 600,  description: 'Inscripción carrera popular',            date: new Date('2025-11-08'), categoryId: inscripciones.id, source: 'MANUAL' },
+        { clubId: club!.id, type: 'EXPENSE', amount: 890,  description: 'Equipación invierno (mallots térmicos)', date: new Date('2025-11-15'), categoryId: material.id,     source: 'MANUAL' },
+        { clubId: club!.id, type: 'EXPENSE', amount: 350,  description: 'Alquiler vestuarios noviembre',          date: new Date('2025-11-20'), categoryId: instalaciones.id, source: 'MANUAL' },
+        { clubId: club!.id, type: 'EXPENSE', amount: 240,  description: 'Transporte a carrera La Rioja',          date: new Date('2025-11-22'), categoryId: viajes.id,       source: 'MANUAL' },
         // Dic 2025
-        { bankAccountId: bank.id, clubId: club!.id, type: 'INCOME', amount: 3000, description: 'Cuotas diciembre 2025 (25 socios)', date: new Date('2025-12-03'), incomeCategoryId: cuotas.id },
-        { bankAccountId: bank.id, clubId: club!.id, type: 'INCOME', amount: 1500, description: 'Subvención Ayuntamiento deporte', date: new Date('2025-12-10'), incomeCategoryId: patrocinios.id },
-        { bankAccountId: bank.id, clubId: club!.id, type: 'EXPENSE', amount: 350, description: 'Alquiler vestuarios diciembre', date: new Date('2025-12-15'), expenseCategoryId: instalaciones.id },
-        { bankAccountId: bank.id, clubId: club!.id, type: 'EXPENSE', amount: 560, description: 'Cena de navidad del club', date: new Date('2025-12-20'), expenseCategoryId: material.id },
+        { clubId: club!.id, type: 'INCOME',  amount: 3000, description: 'Cuotas diciembre 2025 (25 socios)',      date: new Date('2025-12-03'), categoryId: cuotas.id,       source: 'MANUAL' },
+        { clubId: club!.id, type: 'INCOME',  amount: 1500, description: 'Subvención Ayuntamiento deporte',        date: new Date('2025-12-10'), categoryId: patrocinios.id,  source: 'MANUAL' },
+        { clubId: club!.id, type: 'EXPENSE', amount: 350,  description: 'Alquiler vestuarios diciembre',          date: new Date('2025-12-15'), categoryId: instalaciones.id, source: 'MANUAL' },
+        { clubId: club!.id, type: 'EXPENSE', amount: 560,  description: 'Cena de navidad del club',               date: new Date('2025-12-20'), categoryId: material.id,     source: 'MANUAL' },
         // Ene 2026
-        { bankAccountId: bank.id, clubId: club!.id, type: 'INCOME', amount: 4200, description: 'Cuotas enero 2026 (35 socios)', date: new Date('2026-01-08'), incomeCategoryId: cuotas.id },
-        { bankAccountId: bank.id, clubId: club!.id, type: 'INCOME', amount: 800, description: 'Patrocinio Café Isidro', date: new Date('2026-01-12'), incomeCategoryId: patrocinios.id },
-        { bankAccountId: bank.id, clubId: club!.id, type: 'EXPENSE', amount: 350, description: 'Alquiler vestuarios enero', date: new Date('2026-01-18'), expenseCategoryId: instalaciones.id },
-        { bankAccountId: bank.id, clubId: club!.id, type: 'EXPENSE', amount: 320, description: 'Herramientas y accesorios mecánica', date: new Date('2026-01-25'), expenseCategoryId: material.id },
+        { clubId: club!.id, type: 'INCOME',  amount: 4200, description: 'Cuotas enero 2026 (35 socios)',          date: new Date('2026-01-08'), categoryId: cuotas.id,       source: 'MANUAL' },
+        { clubId: club!.id, type: 'INCOME',  amount: 800,  description: 'Patrocinio Café Isidro',                 date: new Date('2026-01-12'), categoryId: patrocinios.id,  source: 'MANUAL' },
+        { clubId: club!.id, type: 'EXPENSE', amount: 350,  description: 'Alquiler vestuarios enero',              date: new Date('2026-01-18'), categoryId: instalaciones.id, source: 'MANUAL' },
+        { clubId: club!.id, type: 'EXPENSE', amount: 320,  description: 'Herramientas y accesorios mecánica',     date: new Date('2026-01-25'), categoryId: material.id,     source: 'MANUAL' },
         // Feb 2026
-        { bankAccountId: bank.id, clubId: club!.id, type: 'INCOME', amount: 4800, description: 'Cuotas febrero 2026 (40 socios)', date: new Date('2026-02-05'), incomeCategoryId: cuotas.id },
-        { bankAccountId: bank.id, clubId: club!.id, type: 'INCOME', amount: 900, description: 'Inscripciones ruta cicloturista feb', date: new Date('2026-02-10'), incomeCategoryId: inscripciones.id },
-        { bankAccountId: bank.id, clubId: club!.id, type: 'EXPENSE', amount: 350, description: 'Alquiler vestuarios febrero', date: new Date('2026-02-15'), expenseCategoryId: instalaciones.id },
-        { bankAccountId: bank.id, clubId: club!.id, type: 'EXPENSE', amount: 650, description: 'Autocar ruta Mallorca', date: new Date('2026-02-22'), expenseCategoryId: viajes.id },
-        { bankAccountId: bank.id, clubId: club!.id, type: 'EXPENSE', amount: 180, description: 'Reparación rodillo formación', date: new Date('2026-02-25'), expenseCategoryId: material.id },
+        { clubId: club!.id, type: 'INCOME',  amount: 4800, description: 'Cuotas febrero 2026 (40 socios)',        date: new Date('2026-02-05'), categoryId: cuotas.id,       source: 'MANUAL' },
+        { clubId: club!.id, type: 'INCOME',  amount: 900,  description: 'Inscripciones ruta cicloturista feb',    date: new Date('2026-02-10'), categoryId: inscripciones.id, source: 'MANUAL' },
+        { clubId: club!.id, type: 'EXPENSE', amount: 350,  description: 'Alquiler vestuarios febrero',            date: new Date('2026-02-15'), categoryId: instalaciones.id, source: 'MANUAL' },
+        { clubId: club!.id, type: 'EXPENSE', amount: 650,  description: 'Autocar ruta Mallorca',                  date: new Date('2026-02-22'), categoryId: viajes.id,       source: 'MANUAL' },
+        { clubId: club!.id, type: 'EXPENSE', amount: 180,  description: 'Reparación rodillo formación',           date: new Date('2026-02-25'), categoryId: material.id,     source: 'MANUAL' },
         // Mar 2026
-        { bankAccountId: bank.id, clubId: club!.id, type: 'INCOME', amount: 5400, description: 'Cuotas marzo 2026 (45 socios)', date: new Date('2026-03-05'), incomeCategoryId: cuotas.id },
-        { bankAccountId: bank.id, clubId: club!.id, type: 'INCOME', amount: 2000, description: 'Patrocinio principal BiciShop', date: new Date('2026-03-10'), incomeCategoryId: patrocinios.id },
-        { bankAccountId: bank.id, clubId: club!.id, type: 'EXPENSE', amount: 350, description: 'Alquiler vestuarios marzo', date: new Date('2026-03-15'), expenseCategoryId: instalaciones.id },
-        { bankAccountId: bank.id, clubId: club!.id, type: 'EXPENSE', amount: 1200, description: 'Maillots equipación 2026 (adelanto)', date: new Date('2026-03-18'), expenseCategoryId: material.id },
+        { clubId: club!.id, type: 'INCOME',  amount: 5400, description: 'Cuotas marzo 2026 (45 socios)',          date: new Date('2026-03-05'), categoryId: cuotas.id,       source: 'MANUAL' },
+        { clubId: club!.id, type: 'INCOME',  amount: 2000, description: 'Patrocinio principal BiciShop',          date: new Date('2026-03-10'), categoryId: patrocinios.id,  source: 'MANUAL' },
+        { clubId: club!.id, type: 'EXPENSE', amount: 350,  description: 'Alquiler vestuarios marzo',              date: new Date('2026-03-15'), categoryId: instalaciones.id, source: 'MANUAL' },
+        { clubId: club!.id, type: 'EXPENSE', amount: 1200, description: 'Maillots equipación 2026 (adelanto)',    date: new Date('2026-03-18'), categoryId: material.id,     source: 'MANUAL' },
       ],
     })
 

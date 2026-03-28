@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { ok, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
 
 // GET /api/clubs/[clubId]/messages/inbox — socio inbox

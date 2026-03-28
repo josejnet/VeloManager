@@ -1,15 +1,15 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { writeAudit, AUDIT } from '@/lib/audit'
 import { ok, err } from '@/lib/utils'
 
-// POST /api/clubs/[clubId]/accounting/invoices/[invoiceId]/approve
+// POST /api/clubs/[clubId]/accounting/invoices/[invoiceId] — approve invoice → BankMovement (EXPENSE)
 export async function POST(
   _req: NextRequest,
   { params }: { params: { clubId: string; invoiceId: string } }
 ) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const invoice = await prisma.invoice.findFirst({
@@ -18,29 +18,28 @@ export async function POST(
   if (!invoice) return err('Factura no encontrada', 404)
   if (invoice.approved) return err('Factura ya aprobada', 409)
 
-  const bankAccount = await prisma.bankAccount.findUnique({ where: { clubId: params.clubId } })
-  if (!bankAccount) return err('Cuenta bancaria no encontrada', 404)
+  // Idempotency guard
+  const existing = await prisma.bankMovement.findUnique({
+    where: { source_sourceId: { source: 'INVOICE', sourceId: params.invoiceId } },
+  })
+  if (existing) return err('Ya existe un movimiento para esta factura', 409)
 
-  // Approve invoice + deduct from bank in a single transaction
-  const [updatedInvoice, transaction] = await prisma.$transaction([
+  // Approve invoice + create EXPENSE BankMovement atomically
+  const [updatedInvoice, movement] = await prisma.$transaction([
     prisma.invoice.update({
       where: { id: params.invoiceId },
       data: { approved: true },
     }),
-    prisma.transaction.create({
+    prisma.bankMovement.create({
       data: {
-        bankAccountId: bankAccount.id,
         clubId: params.clubId,
         type: 'EXPENSE',
         amount: invoice.amount,
         description: `Factura: ${invoice.description} (${invoice.supplier})`,
+        source: 'INVOICE',
+        sourceId: params.invoiceId,
         date: invoice.date,
-        invoiceId: params.invoiceId,
       },
-    }),
-    prisma.bankAccount.update({
-      where: { id: bankAccount.id },
-      data: { balance: { decrement: invoice.amount } },
     }),
   ])
 
@@ -53,5 +52,5 @@ export async function POST(
     details: { supplier: invoice.supplier, amount: Number(invoice.amount) },
   })
 
-  return ok({ invoice: updatedInvoice, transaction })
+  return ok({ invoice: updatedInvoice, movement })
 }

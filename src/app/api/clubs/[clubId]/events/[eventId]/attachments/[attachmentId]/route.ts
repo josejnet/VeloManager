@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { ok, err } from '@/lib/utils'
 
 // DELETE /api/clubs/[clubId]/events/[eventId]/attachments/[attachmentId]
@@ -8,7 +8,7 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: { clubId: string; eventId: string; attachmentId: string } }
 ) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const attachment = await prisma.eventAttachment.findFirst({

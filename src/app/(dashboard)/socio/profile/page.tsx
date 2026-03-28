@@ -12,7 +12,7 @@ import { User, Lock, Building2, ExternalLink } from 'lucide-react'
 interface ClubMembership {
   id: string
   status: string
-  role: string
+  clubRole: string
   club: {
     id: string
     name: string
@@ -33,8 +33,8 @@ interface Profile {
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  CLUB_ADMIN: 'Admin',
-  SOCIO: 'Socio',
+  ADMIN: 'Admin',
+  MEMBER: 'Socio',
   SUPER_ADMIN: 'Superadmin',
 }
 
@@ -141,7 +141,7 @@ export default function SocioProfilePage() {
   if (loading) {
     return (
       <div className="flex flex-col flex-1 overflow-auto">
-        <Header title="Mi perfil" clubId="" />
+        <Header title="Mi perfil" />
         <main className="flex-1 p-6">
           <p className="text-sm text-gray-400 text-center py-16">Cargando...</p>
         </main>
@@ -151,7 +151,7 @@ export default function SocioProfilePage() {
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title="Mi perfil" clubId="" />
+      <Header title="Mi perfil" />
       <main className="flex-1 p-6 space-y-6 max-w-2xl mx-auto w-full">
         {/* Avatar + identity */}
         <Card>
@@ -283,7 +283,7 @@ export default function SocioProfilePage() {
 
                   <div className="flex items-center gap-2 shrink-0">
                     <MemberStatusBadge status={m.status} />
-                    <Badge variant="default">{ROLE_LABELS[m.role] ?? m.role}</Badge>
+                    <Badge variant="default">{ROLE_LABELS[m.clubRole] ?? m.clubRole}</Badge>
                     {m.status === 'APPROVED' && (
                       <Button
                         size="sm"

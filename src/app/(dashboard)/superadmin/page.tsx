@@ -24,7 +24,6 @@ export default async function SuperAdminPage() {
       take: 10,
       orderBy: { createdAt: 'desc' },
       include: {
-        bankAccount: true,
         _count: { select: { memberships: { where: { status: 'APPROVED' } } } },
       },
     }),
@@ -32,7 +31,7 @@ export default async function SuperAdminPage() {
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title="Panel Super Admin" clubId="" />
+      <Header title="Panel Super Admin" />
       <main className="flex-1 p-6 space-y-6">
         <div className="grid grid-cols-4 gap-4">
           <StatCard title="Clubs activos" value={totalClubs} icon={Building2} color="blue" />
@@ -73,7 +72,7 @@ export default async function SuperAdminPage() {
                   <td className="py-3 text-gray-600">{club.sport}</td>
                   <td className="py-3 text-right font-medium">{club._count.memberships}</td>
                   <td className="py-3 text-right font-semibold">
-                    {club.bankAccount ? fmtCurrency(club.bankAccount.balance) : '—'}
+                    {'—'}
                   </td>
                   <td className="py-3 text-right text-gray-500">{fmtDate(club.createdAt)}</td>
                 </tr>

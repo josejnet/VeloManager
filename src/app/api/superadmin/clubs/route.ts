@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSuperAdmin } from '@/lib/club-access'
+import { requireSuperAdmin } from '@/lib/authz'
 import { ok, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
 
 // GET /api/superadmin/clubs — full platform metrics

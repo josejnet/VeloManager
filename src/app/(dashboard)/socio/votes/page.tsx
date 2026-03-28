@@ -1,6 +1,7 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
-import { useSession } from 'next-auth/react'
+import { useState } from 'react'
+import useSWR from 'swr'
+import { useClub } from '@/context/ClubContext'
 import { Header } from '@/components/layout/Header'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -10,40 +11,27 @@ import { CheckCircle2, Vote } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function SocioVotesPage() {
-  const { data: session } = useSession()
-  const [clubId, setClubId] = useState('')
-  const [votes, setVotes] = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
+  const { clubId } = useClub()
 
-  useEffect(() => {
-    if (!session?.user) return
-    fetch('/api/clubs?pageSize=1').then((r) => r.json()).then((d) => { if (d.data?.[0]) setClubId(d.data[0].id) })
-  }, [session])
-
-  const fetchVotes = useCallback(async () => {
-    if (!clubId) return
-    setLoading(true)
-    const res = await fetch(`/api/clubs/${clubId}/votes?active=false&pageSize=50`)
-    if (res.ok) { const d = await res.json(); setVotes(d.data ?? []) }
-    setLoading(false)
-  }, [clubId])
-
-  useEffect(() => { fetchVotes() }, [fetchVotes])
+  const { data, isLoading, mutate } = useSWR<any>(
+    `/api/clubs/${clubId}/votes?active=false&pageSize=50`
+  )
+  const votes: any[] = data?.data ?? []
 
   const castVote = async (voteId: string, optionId: string) => {
     const res = await fetch(`/api/clubs/${clubId}/votes/${voteId}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ optionId }),
     })
-    if (res.ok) { toast.success('Voto registrado'); fetchVotes() }
+    if (res.ok) { toast.success('Voto registrado'); mutate() }
     else { const d = await res.json(); toast.error(d.error ?? 'Error') }
   }
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title="Votaciones" clubId={clubId} />
+      <Header title="Votaciones" />
       <main className="flex-1 p-6">
-        {loading ? (
-          <p className="text-sm text-gray-400 py-8 text-center">Cargando...</p>
+        {isLoading ? (
+          <p className="text-sm text-gray-400 py-8 text-center animate-pulse">Cargando…</p>
         ) : votes.length === 0 ? (
           <Card><p className="text-sm text-gray-400 py-8 text-center">Sin votaciones disponibles</p></Card>
         ) : (

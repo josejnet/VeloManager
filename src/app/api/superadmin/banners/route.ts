@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireSuperAdmin } from '@/lib/club-access'
+import { requireSuperAdmin } from '@/lib/authz'
 import { ok, err, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
 
 const CreateBannerSchema = z.object({
@@ -16,7 +16,7 @@ const CreateBannerSchema = z.object({
   targetProvince: z.string().optional(),
   targetLocality: z.string().optional(),
   targetClubIds: z.array(z.string()).optional(),
-  targetRoles: z.array(z.enum(['CLUB_ADMIN', 'SOCIO', 'SUPER_ADMIN'])).optional(),
+  targetRoles: z.array(z.enum(['ADMIN', 'MEMBER'])).optional(),
   // Scheduling
   publishAt: z.string().datetime().optional(),
   expiresAt: z.string().datetime().nullable().optional(),

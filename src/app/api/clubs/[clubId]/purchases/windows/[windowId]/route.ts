@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { writeAudit, AUDIT } from '@/lib/audit'
 import { ok, err } from '@/lib/utils'
 
@@ -14,7 +14,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { clubId: string; windowId: string } }
 ) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const body = await req.json().catch(() => null)
@@ -48,7 +48,7 @@ export async function PATCH(
   // Notify all members when window opens
   if (parsed.data.status === 'OPEN') {
     const members = await prisma.clubMembership.findMany({
-      where: { clubId: params.clubId, status: 'APPROVED', role: 'SOCIO' },
+      where: { clubId: params.clubId, status: 'APPROVED', clubRole: 'MEMBER' },
       select: { userId: true },
     })
     if (members.length > 0) {

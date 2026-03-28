@@ -83,7 +83,45 @@ export const THEMES: Record<ThemeKey, ThemeConfig> = {
   },
 }
 
-export function getThemeVars(themeKey: string): string {
+// ─── Hex color helpers ────────────────────────────────────────────────────
+
+/** Convert #rrggbb → "r g b" (space-separated for CSS custom properties) */
+function hexToRgbString(hex: string): string | null {
+  const clean = hex.replace('#', '')
+  if (!/^[0-9a-f]{6}$/i.test(clean)) return null
+  const r = parseInt(clean.slice(0, 2), 16)
+  const g = parseInt(clean.slice(2, 4), 16)
+  const b = parseInt(clean.slice(4, 6), 16)
+  return `${r} ${g} ${b}`
+}
+
+/** Darken/lighten an RGB string by multiplying channels (factor < 1 = darken) */
+function shiftRgb(rgb: string, factor: number): string {
+  return rgb
+    .split(' ')
+    .map((v) => Math.min(255, Math.max(0, Math.round(parseInt(v) * factor))).toString())
+    .join(' ')
+}
+
+export function getThemeVars(
+  themeKey: string,
+  primaryColor?: string | null,
+  secondaryColor?: string | null,
+): string {
+  // If a valid custom hex primary is supplied, use it and derive dark/light variants
+  const customPrimaryRgb = primaryColor ? hexToRgbString(primaryColor) : null
+  if (customPrimaryRgb) {
+    const customSecondaryRgb = secondaryColor ? (hexToRgbString(secondaryColor) ?? customPrimaryRgb) : customPrimaryRgb
+    return [
+      `--color-primary: ${customPrimaryRgb};`,
+      `--color-primary-dark: ${shiftRgb(customPrimaryRgb, 0.82)};`,
+      `--color-primary-light: ${shiftRgb(customPrimaryRgb, 1.32)};`,
+      `--color-secondary: ${customSecondaryRgb};`,
+      `--color-accent: ${shiftRgb(customPrimaryRgb, 1.6)};`,
+    ].join(' ')
+  }
+
+  // Fall back to predefined theme palette
   const theme = THEMES[themeKey as ThemeKey] ?? THEMES.blue
   return [
     `--color-primary: ${theme.primary};`,

@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireSuperAdmin } from '@/lib/club-access'
+import { requireSuperAdmin } from '@/lib/authz'
 import { ok, err, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
+import type { PlatformRole } from '@prisma/client'
 
 // GET /api/superadmin/users — full user list with their memberships
 export async function GET(req: NextRequest) {
@@ -11,7 +12,7 @@ export async function GET(req: NextRequest) {
 
   const { page, pageSize, skip, take } = getPaginationParams(req.nextUrl.searchParams)
   const search = req.nextUrl.searchParams.get('search')
-  const role = req.nextUrl.searchParams.get('role')
+  const platformRoleFilter = req.nextUrl.searchParams.get('role') as PlatformRole | null
 
   const where = {
     ...(search ? {
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
         { email: { contains: search, mode: 'insensitive' as const } },
       ]
     } : {}),
-    ...(role ? { role: role as 'SUPER_ADMIN' | 'CLUB_ADMIN' | 'SOCIO' } : {}),
+    ...(platformRoleFilter ? { platformRole: platformRoleFilter } : {}),
   }
 
   const [users, total] = await Promise.all([
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest) {
         id: true,
         name: true,
         email: true,
-        role: true,
+        platformRole: true,
         province: true,
         locality: true,
         createdAt: true,
@@ -50,9 +51,9 @@ export async function GET(req: NextRequest) {
   return ok(buildPaginatedResponse(users, total, page, pageSize))
 }
 
-// PATCH /api/superadmin/users/[userId] — update role or suspend
+// PATCH /api/superadmin/users — update platform role
 const UpdateUserSchema = z.object({
-  role: z.enum(['SUPER_ADMIN', 'CLUB_ADMIN', 'SOCIO']).optional(),
+  platformRole: z.enum(['SUPER_ADMIN', 'USER'] as const).optional(),
 })
 
 export async function PATCH(req: NextRequest) {
@@ -69,7 +70,7 @@ export async function PATCH(req: NextRequest) {
   const updated = await prisma.user.update({
     where: { id: userId },
     data: parsed.data,
-    select: { id: true, name: true, email: true, role: true },
+    select: { id: true, name: true, email: true, platformRole: true },
   })
 
   return ok(updated)
