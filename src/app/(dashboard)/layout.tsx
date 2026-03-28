@@ -13,7 +13,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!session?.user) redirect('/login')
 
   const userId = (session.user as { id: string }).id
-  const role = (session.user as { role: string }).role as 'SUPER_ADMIN' | 'CLUB_ADMIN' | 'SOCIO'
+
+  // Always query DB for role — JWT can be stale after role changes
+  const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+  const role = (dbUser?.role ?? 'SOCIO') as 'SUPER_ADMIN' | 'CLUB_ADMIN' | 'SOCIO'
+
+  const headersList = await headers()
+  const pathname = headersList.get('x-pathname') ?? headersList.get('x-invoke-path') ?? ''
+
+  // Prevent SOCIO from accessing admin routes (defense-in-depth on top of middleware)
+  if (role === 'SOCIO' && pathname.startsWith('/admin')) {
+    redirect('/socio')
+  }
 
   let club = null
   let membershipRole: 'CLUB_ADMIN' | 'SOCIO' | null = null
@@ -21,7 +32,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   if (role !== 'SUPER_ADMIN') {
     // Cookie set by ClubSwitcher when user changes active club
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const activeClubId = cookieStore.get('activeClubId')?.value ?? null
 
     // Try the preferred club first
@@ -48,8 +59,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
     }
   }
 
-  const headersList = headers()
-  const pathname = headersList.get('x-pathname') ?? headersList.get('x-invoke-path') ?? ''
   const isInSocioView = pathname.startsWith('/socio')
   const isAdminViewingAsSocio = membershipRole === 'CLUB_ADMIN' && isInSocioView
 
