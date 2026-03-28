@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import Link from 'next/link'
+import { useDashboard } from '@/providers/DashboardProvider'
 import {
   Calendar,
   MapPin,
@@ -235,6 +237,9 @@ function SkeletonLoader() {
 export default function SocioDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const pathname = usePathname()
+  const { clubId } = useDashboard()
+  const baseHref = pathname.startsWith('/clubs/') ? `/clubs/${clubId}` : ''
 
   useEffect(() => {
     fetch('/api/dashboard/user')
@@ -326,7 +331,7 @@ export default function SocioDashboardPage() {
             {priorities.pendingQuotas.map((q) => (
               <Link
                 key={q.id}
-                href="/socio/quotas"
+                href={`${baseHref}/socio/quotas`}
                 className="inline-flex items-center gap-1 px-3 py-1 bg-amber-100 text-amber-800 text-xs font-medium rounded-full hover:bg-amber-200 transition-colors"
               >
                 Cuota {q.year} — {fmtCurrency(q.amount)}
@@ -335,7 +340,7 @@ export default function SocioDashboardPage() {
             {priorities.unpaidOrders.map((o) => (
               <Link
                 key={o.id}
-                href="/socio/purchases"
+                href={`${baseHref}/socio/purchases`}
                 className="inline-flex items-center gap-1 px-3 py-1 bg-amber-100 text-amber-800 text-xs font-medium rounded-full hover:bg-amber-200 transition-colors"
               >
                 Pedido: {o.windowName} — {fmtCurrency(o.totalAmount)}
@@ -344,7 +349,7 @@ export default function SocioDashboardPage() {
             {priorities.unpaidEventPayments.map((ep) => (
               <Link
                 key={ep.id}
-                href="/socio/events"
+                href={`${baseHref}/socio/events`}
                 className="inline-flex items-center gap-1 px-3 py-1 bg-amber-100 text-amber-800 text-xs font-medium rounded-full hover:bg-amber-200 transition-colors"
               >
                 Pago evento: {ep.eventTitle} — {fmtCurrency(ep.amount)}
@@ -367,7 +372,7 @@ export default function SocioDashboardPage() {
                 <Calendar className="h-4 w-4 text-blue-500" />
                 Próximos eventos
               </h3>
-              <Link href="/socio/events" className="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
+              <Link href={`${baseHref}/socio/events`} className="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
                 Ver todos <ChevronRight className="h-3 w-3" />
               </Link>
             </div>
@@ -425,7 +430,7 @@ export default function SocioDashboardPage() {
                             </span>
                           ) : (
                             <Link
-                              href="/socio/events"
+                              href={`${baseHref}/socio/events`}
                               className="px-3 py-1 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700"
                             >
                               Apuntarse
@@ -448,7 +453,7 @@ export default function SocioDashboardPage() {
                   <ShoppingBag className="h-4 w-4 text-purple-500" />
                   Mis pedidos
                 </h3>
-                <Link href="/socio/purchases" className="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
+                <Link href={`${baseHref}/socio/purchases`} className="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
                   Ver todos <ChevronRight className="h-3 w-3" />
                 </Link>
               </div>
@@ -517,7 +522,7 @@ export default function SocioDashboardPage() {
                 <Wallet className="h-4 w-4 text-emerald-500" />
                 Estado financiero
               </h3>
-              <Link href="/socio/quotas" className="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
+              <Link href={`${baseHref}/socio/quotas`} className="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
                 Ver historial <ChevronRight className="h-3 w-3" />
               </Link>
             </div>
@@ -580,7 +585,7 @@ export default function SocioDashboardPage() {
                         </span>
                       ) : (
                         <Link
-                          href="/socio/votes"
+                          href={`${baseHref}/socio/votes`}
                           className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700"
                         >
                           Votar
@@ -603,28 +608,28 @@ export default function SocioDashboardPage() {
             </div>
             <div className="px-5 pb-5 grid grid-cols-2 gap-2">
               <Link
-                href="/socio/events"
+                href={`${baseHref}/socio/events`}
                 className="flex flex-col items-center gap-1.5 p-3 rounded-xl hover:bg-gray-50 transition-colors text-center"
               >
                 <Calendar className="h-5 w-5 text-blue-500" />
                 <span className="text-xs font-medium text-gray-700">Eventos</span>
               </Link>
               <Link
-                href="/socio/purchases"
+                href={`${baseHref}/socio/purchases`}
                 className="flex flex-col items-center gap-1.5 p-3 rounded-xl hover:bg-gray-50 transition-colors text-center"
               >
                 <ShoppingCart className="h-5 w-5 text-purple-500" />
                 <span className="text-xs font-medium text-gray-700">Pedidos</span>
               </Link>
               <Link
-                href="/socio/votes"
+                href={`${baseHref}/socio/votes`}
                 className="flex flex-col items-center gap-1.5 p-3 rounded-xl hover:bg-gray-50 transition-colors text-center"
               >
                 <CheckSquare className="h-5 w-5 text-indigo-500" />
                 <span className="text-xs font-medium text-gray-700">Votaciones</span>
               </Link>
               <Link
-                href="/socio/support"
+                href={`${baseHref}/socio/support`}
                 className="flex flex-col items-center gap-1.5 p-3 rounded-xl hover:bg-gray-50 transition-colors text-center"
               >
                 <LifeBuoy className="h-5 w-5 text-teal-500" />
