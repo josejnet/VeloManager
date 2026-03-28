@@ -14,7 +14,7 @@ const CreateVoteSchema = z.object({
 })
 
 // Derives the display status of a vote based on fields + current time
-export function voteStatus(vote: { active: boolean; startsAt: Date | null; endsAt: Date | null }): 'scheduled' | 'active' | 'closed' {
+function voteStatus(vote: { active: boolean; startsAt: Date | null; endsAt: Date | null }): 'scheduled' | 'active' | 'closed' {
   if (!vote.active) return 'closed'
   const now = new Date()
   if (vote.startsAt && vote.startsAt > now) return 'scheduled'

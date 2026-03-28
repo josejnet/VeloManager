@@ -656,10 +656,17 @@ function ImportMovementsModal({ open, onClose, clubId, onSuccess }: {
     const reader = new FileReader()
     reader.onload = (ev) => {
       const text = ev.target?.result as string
-      setRows(parseMovementsCsv(text))
-      setProgress(null)
+      // Fallback to windows-1252 if UTF-8 produced replacement chars (Excel exports)
+      if (text.includes('\uFFFD')) {
+        const r2 = new FileReader()
+        r2.onload = (ev2) => { setRows(parseMovementsCsv(ev2.target?.result as string)); setProgress(null) }
+        r2.readAsText(file, 'windows-1252')
+      } else {
+        setRows(parseMovementsCsv(text))
+        setProgress(null)
+      }
     }
-    reader.readAsText(file)
+    reader.readAsText(file, 'utf-8')
   }
 
   const handleImport = async () => {
@@ -668,6 +675,7 @@ function ImportMovementsModal({ open, onClose, clubId, onSuccess }: {
     setProgress({ done: 0, total: rows.length })
     let succeeded = 0
     let failed = 0
+    let firstError = ''
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]
@@ -678,13 +686,20 @@ function ImportMovementsModal({ open, onClose, clubId, onSuccess }: {
           body: JSON.stringify({
             description: row.descripcion,
             amount: parseFloat(row.importe),
-            type: row.tipo.toUpperCase(),
-            date: row.fecha,
+            type: row.tipo.toUpperCase().trim(),
+            date: row.fecha.trim(),
             categoryId: null,
           }),
         })
-        if (res.ok) succeeded++
-        else failed++
+        if (res.ok) {
+          succeeded++
+        } else {
+          failed++
+          if (!firstError) {
+            const d = await res.json().catch(() => ({}))
+            firstError = d.error ?? `Error HTTP ${res.status}`
+          }
+        }
       } catch {
         failed++
       }
@@ -692,12 +707,13 @@ function ImportMovementsModal({ open, onClose, clubId, onSuccess }: {
     }
 
     setImporting(false)
-    if (failed === 0) {
+    if (succeeded > 0) {
       toast.success(`${succeeded} movimientos importados correctamente`)
-    } else {
-      toast.error(`${succeeded} importados, ${failed} fallidos`)
     }
-    onSuccess()
+    if (failed > 0) {
+      toast.error(`${failed} fallidos${firstError ? `: ${firstError}` : ''}`, { duration: 6000 })
+    }
+    if (succeeded > 0) onSuccess()
   }
 
   const handleClose = () => {
