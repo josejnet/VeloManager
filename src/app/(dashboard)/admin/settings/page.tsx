@@ -5,7 +5,7 @@ import { Header } from '@/components/layout/Header'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { THEMES, getThemeVars } from '@/lib/themes'
+import { THEMES, getThemeVars, themeVarsToStyle } from '@/lib/themes'
 import toast from 'react-hot-toast'
 
 type Visibility = 'PUBLIC' | 'PRIVATE' | 'HIDDEN'
@@ -87,7 +87,7 @@ export default function SettingsPage() {
   ]
 
   return (
-    <div className="flex flex-col flex-1 overflow-auto" style={{ cssText: getThemeVars(form.colorTheme) } as React.CSSProperties}>
+    <div className="flex flex-col flex-1 overflow-auto" style={themeVarsToStyle(getThemeVars(form.colorTheme))}>
       <Header title="Configuración del Club" clubId={clubId} />
       <main className="flex-1 p-6 space-y-6">
 

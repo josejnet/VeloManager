@@ -131,3 +131,20 @@ export function getThemeVars(
     `--color-accent: ${theme.accent};`,
   ].join(' ')
 }
+
+/**
+ * Convert the CSS-variable string returned by getThemeVars() into a React
+ * inline style object so the vars are actually injected into the DOM.
+ * (React ignores the `cssText` property on style objects.)
+ */
+export function themeVarsToStyle(vars: string): React.CSSProperties {
+  const style: Record<string, string> = {}
+  vars.split(';').forEach((decl) => {
+    const idx = decl.indexOf(':')
+    if (idx === -1) return
+    const prop = decl.slice(0, idx).trim()
+    const val = decl.slice(idx + 1).trim()
+    if (prop && val) style[prop] = val
+  })
+  return style as React.CSSProperties
+}

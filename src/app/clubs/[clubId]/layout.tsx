@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { getThemeVars } from '@/lib/themes'
+import { getThemeVars, themeVarsToStyle } from '@/lib/themes'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { DashboardProvider } from '@/providers/DashboardProvider'
 import type { DashboardContextValue } from '@/providers/DashboardProvider'
@@ -108,7 +108,7 @@ export default async function ClubLayout({ children, params }: ClubLayoutProps) 
 
   const layout = (
     <DashboardProvider value={contextValue}>
-      <div className="flex h-screen overflow-hidden" style={{ cssText: themeVars } as React.CSSProperties}>
+      <div className="flex h-screen overflow-hidden" style={themeVarsToStyle(themeVars)}>
         <Sidebar
           role={sidebarRole}
           clubName={club?.name}
