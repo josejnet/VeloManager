@@ -27,6 +27,7 @@ export const config = {
   matcher: [
     '/admin/:path*',
     '/socio/:path*',
+    '/clubs/:path*',
     '/superadmin/((?!login).*)',
     '/api/clubs/:path*',
     '/api/notifications/:path*',

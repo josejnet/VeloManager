@@ -1,6 +1,6 @@
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
-import { headers, cookies } from 'next/headers'
+import { headers } from 'next/headers'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getThemeVars } from '@/lib/themes'
@@ -8,89 +8,89 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { DashboardProvider } from '@/providers/DashboardProvider'
 import type { DashboardContextValue } from '@/providers/DashboardProvider'
 
-export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+interface ClubLayoutProps {
+  children: React.ReactNode
+  params: Promise<{ clubId: string }>
+}
+
+export default async function ClubLayout({ children, params }: ClubLayoutProps) {
+  const { clubId } = await params
+
   const session = await getServerSession(authOptions)
   if (!session?.user) redirect('/login')
 
   const userId = (session.user as { id: string }).id
 
-  // Always query DB for role — JWT can be stale after role changes
+  // Always query DB for platform role — never trust JWT
   const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
-  const role = (dbUser?.role ?? 'SOCIO') as 'SUPER_ADMIN' | 'CLUB_ADMIN' | 'SOCIO'
+  const platformRole = dbUser?.role ?? 'SOCIO'
 
   const headersList = await headers()
   const pathname = headersList.get('x-pathname') ?? headersList.get('x-invoke-path') ?? ''
-
-  // Prevent SOCIO from accessing admin routes (defense-in-depth on top of middleware)
-  if (role === 'SOCIO' && pathname.startsWith('/admin')) {
-    redirect('/socio')
-  }
 
   let club = null
   let membershipRole: 'CLUB_ADMIN' | 'SOCIO' | null = null
   let membershipId = ''
 
-  if (role !== 'SUPER_ADMIN') {
-    const cookieStore = await cookies()
-    const activeClubId = cookieStore.get('activeClubId')?.value ?? null
-
-    let membership = activeClubId
-      ? await prisma.clubMembership.findFirst({
-          where: { userId, clubId: activeClubId, status: 'APPROVED' },
-          include: { club: true },
-        })
-      : null
+  if (platformRole !== 'SUPER_ADMIN') {
+    const membership = await prisma.clubMembership.findFirst({
+      where: { userId, clubId, status: 'APPROVED' },
+      include: { club: true },
+    })
 
     if (!membership) {
-      membership = await prisma.clubMembership.findFirst({
+      // User is not a member of this club — redirect to their first available club
+      const fallback = await prisma.clubMembership.findFirst({
         where: { userId, status: 'APPROVED' },
         orderBy: { joinedAt: 'asc' },
-        include: { club: true },
+        select: { clubId: true },
       })
-    }
-
-    if (membership) {
-      club = membership.club
-      membershipRole = membership.role as 'CLUB_ADMIN' | 'SOCIO'
-      membershipId = membership.id
-
-      // Phase 4: Redirect /admin/* and /socio/* to the new URL-based structure
-      if (pathname.startsWith('/admin') || pathname.startsWith('/socio')) {
-        const section = pathname.startsWith('/socio') ? 'socio' : 'admin'
-        const subpath = pathname.startsWith('/socio')
-          ? pathname.slice('/socio'.length)
-          : pathname.slice('/admin'.length)
-        redirect(`/clubs/${membership.clubId}/${section}${subpath}`)
+      if (fallback) {
+        redirect(`/clubs/${fallback.clubId}/socio`)
+      } else {
+        redirect('/login')
       }
     }
+
+    club = membership.club
+    membershipRole = membership.role as 'CLUB_ADMIN' | 'SOCIO'
+    membershipId = membership.id
+  } else {
+    // Super admin: load any club data for display
+    club = await prisma.club.findUnique({
+      where: { id: clubId },
+    })
   }
 
-  const isInSocioView = pathname.startsWith('/socio')
+  // Derive view mode from pathname
+  const isInSocioView = pathname.includes('/socio')
   const isAdminViewingAsSocio = membershipRole === 'CLUB_ADMIN' && isInSocioView
 
-  const sidebarRole = role === 'SUPER_ADMIN'
+  const sidebarRole = platformRole === 'SUPER_ADMIN'
     ? 'SUPER_ADMIN'
     : isAdminViewingAsSocio
       ? 'SOCIO'
       : (membershipRole ?? 'SOCIO')
 
-  const mode: DashboardContextValue['mode'] = role === 'SUPER_ADMIN'
+  const mode: DashboardContextValue['mode'] = platformRole === 'SUPER_ADMIN'
     ? 'superadmin'
     : isInSocioView
       ? 'socio'
       : 'admin'
 
   const contextValue: DashboardContextValue = {
-    clubId: club?.id ?? '',
+    clubId: club?.id ?? clubId,
     clubName: club?.name ?? '',
     clubLogo: club?.logoUrl ?? null,
     colorTheme: club?.colorTheme ?? null,
     membershipId,
-    role: role === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : (membershipRole ?? 'SOCIO'),
+    role: platformRole === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : (membershipRole ?? 'SOCIO'),
     mode,
     isAdminViewingAsSocio,
   }
 
+  // The base path for nav links in this route group (eliminates cookie dependency)
+  const baseHref = `/clubs/${clubId}`
   const themeVars = getThemeVars(club?.colorTheme ?? 'blue')
 
   return (
@@ -100,10 +100,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
           role={sidebarRole}
           clubName={club?.name}
           clubLogo={club?.logoUrl}
-          colorTheme={club?.colorTheme}
+          colorTheme={club?.colorTheme ?? undefined}
           isAdminViewingAsSocio={isAdminViewingAsSocio}
           mode={mode}
-          baseHref=""
+          baseHref={baseHref}
         />
         <div className="flex-1 flex flex-col overflow-hidden">
           {children}

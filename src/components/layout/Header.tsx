@@ -1,5 +1,5 @@
 'use client'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { ShieldCheck, User, ArrowLeftRight } from 'lucide-react'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
@@ -33,6 +33,7 @@ const MODE_CONFIG = {
 
 export function Header({ title }: HeaderProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const { data: session } = useSession()
   const { clubId, mode, role, isAdminViewingAsSocio } = useDashboard()
 
@@ -41,19 +42,42 @@ export function Header({ title }: HeaderProps) {
   const ModeIcon = cfg.icon
   const canToggle = role === 'CLUB_ADMIN'
 
+  // Detect new URL structure: /clubs/[clubId]/...
+  const isNewStructure = pathname.startsWith('/clubs/')
+  const baseHref = isNewStructure ? `/clubs/${clubId}` : ''
+
   const handleToggle = () => {
-    if (mode === 'admin' || isAdminViewingAsSocio) {
-      router.push('/socio')
+    if (isNewStructure) {
+      // URL-based navigation — no cookie needed
+      if (mode === 'admin' || isAdminViewingAsSocio) {
+        router.push(`${baseHref}/socio`)
+      } else {
+        router.push(`${baseHref}/admin`)
+      }
     } else {
-      router.push('/admin')
+      // Legacy cookie-based navigation
+      if (mode === 'admin' || isAdminViewingAsSocio) {
+        router.push('/socio')
+      } else {
+        router.push('/admin')
+      }
     }
   }
 
   const handleClubSwitch = (newClubId: string) => {
-    document.cookie = `activeClubId=${newClubId}; path=/; max-age=31536000; SameSite=Lax`
-    const dest = mode === 'admin' ? '/admin' : '/socio'
-    router.push(dest)
-    router.refresh()
+    if (isNewStructure) {
+      // URL-based switch: keep section (admin/socio) from current path
+      const parts = pathname.split('/')
+      // /clubs/[clubId]/admin/... → parts[3] = 'admin' or 'socio'
+      const section = parts[3] === 'socio' ? 'socio' : 'admin'
+      router.push(`/clubs/${newClubId}/${section}`)
+    } else {
+      // Legacy: set cookie + navigate
+      document.cookie = `activeClubId=${newClubId}; path=/; max-age=31536000; SameSite=Lax`
+      const dest = mode === 'admin' ? '/admin' : '/socio'
+      router.push(dest)
+      router.refresh()
+    }
   }
 
   return (

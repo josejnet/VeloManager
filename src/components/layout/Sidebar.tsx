@@ -16,35 +16,41 @@ interface NavItem {
   icon: React.ElementType
 }
 
-const adminNav: NavItem[] = [
-  { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-  { label: 'Socios', href: '/admin/members', icon: Users },
-  { label: 'Directorio', href: '/admin/members/directory', icon: ClipboardList },
-  { label: 'Deudas', href: '/admin/members/debt', icon: AlertCircle },
-  { label: 'Contabilidad', href: '/admin/accounting', icon: Wallet },
-  { label: 'Informes', href: '/admin/accounting/reports', icon: BarChart2 },
-  { label: 'Compras conjuntas', href: '/admin/purchases', icon: ShoppingBag },
-  { label: 'Votaciones', href: '/admin/votes', icon: Vote },
-  { label: 'Eventos', href: '/admin/events', icon: Calendar },
-  { label: 'Mensajería', href: '/admin/messages', icon: Globe },
-  { label: 'Anuncios', href: '/admin/announcements', icon: Bell },
-  { label: 'Auditoría', href: '/admin/audit', icon: ClipboardList },
-  { label: 'Notificaciones', href: '/notifications', icon: BellRing },
-  { label: 'Soporte', href: '/admin/support', icon: LifeBuoy },
-  { label: 'Configuración', href: '/admin/settings', icon: Settings },
-]
+// Build nav arrays dynamically based on base path (empty string = old /admin|/socio structure)
+function makeAdminNav(base: string): NavItem[] {
+  return [
+    { label: 'Dashboard', href: `${base}/admin`, icon: LayoutDashboard },
+    { label: 'Socios', href: `${base}/admin/members`, icon: Users },
+    { label: 'Directorio', href: `${base}/admin/members/directory`, icon: ClipboardList },
+    { label: 'Deudas', href: `${base}/admin/members/debt`, icon: AlertCircle },
+    { label: 'Contabilidad', href: `${base}/admin/accounting`, icon: Wallet },
+    { label: 'Informes', href: `${base}/admin/accounting/reports`, icon: BarChart2 },
+    { label: 'Compras conjuntas', href: `${base}/admin/purchases`, icon: ShoppingBag },
+    { label: 'Votaciones', href: `${base}/admin/votes`, icon: Vote },
+    { label: 'Eventos', href: `${base}/admin/events`, icon: Calendar },
+    { label: 'Mensajería', href: `${base}/admin/messages`, icon: Globe },
+    { label: 'Anuncios', href: `${base}/admin/announcements`, icon: Bell },
+    { label: 'Auditoría', href: `${base}/admin/audit`, icon: ClipboardList },
+    { label: 'Notificaciones', href: `${base}/notifications`, icon: BellRing },
+    { label: 'Soporte', href: `${base}/admin/support`, icon: LifeBuoy },
+    { label: 'Configuración', href: `${base}/admin/settings`, icon: Settings },
+  ]
+}
 
-const socioNav: NavItem[] = [
-  { label: 'Mi Club', href: '/socio', icon: LayoutDashboard },
-  { label: 'Mis Pedidos', href: '/socio/purchases', icon: ShoppingBag },
-  { label: 'Votaciones', href: '/socio/votes', icon: Vote },
-  { label: 'Eventos', href: '/socio/events', icon: Calendar },
-  { label: 'Mensajes', href: '/socio/inbox', icon: Mail },
-  { label: 'Mi Perfil', href: '/socio/profile', icon: User },
-  { label: 'Notificaciones', href: '/notifications', icon: BellRing },
-  { label: 'Soporte', href: '/socio/support', icon: LifeBuoy },
-]
+function makeSocioNav(base: string): NavItem[] {
+  return [
+    { label: 'Mi Club', href: `${base}/socio`, icon: LayoutDashboard },
+    { label: 'Mis Pedidos', href: `${base}/socio/purchases`, icon: ShoppingBag },
+    { label: 'Votaciones', href: `${base}/socio/votes`, icon: Vote },
+    { label: 'Eventos', href: `${base}/socio/events`, icon: Calendar },
+    { label: 'Mensajes', href: `${base}/socio/inbox`, icon: Mail },
+    { label: 'Mi Perfil', href: `${base}/socio/profile`, icon: User },
+    { label: 'Notificaciones', href: `${base}/notifications`, icon: BellRing },
+    { label: 'Soporte', href: `${base}/socio/support`, icon: LifeBuoy },
+  ]
+}
 
+// Superadmin nav never changes (no club context)
 const superAdminNav: NavItem[] = [
   { label: 'Plataforma', href: '/superadmin', icon: Globe },
   { label: 'Todos los clubs', href: '/superadmin/clubs', icon: Trophy },
@@ -62,16 +68,39 @@ interface SidebarProps {
   colorTheme?: string
   isAdminViewingAsSocio?: boolean
   mode?: 'admin' | 'socio' | 'superadmin'
+  /**
+   * Base path prefix for all nav hrefs.
+   * Use "/clubs/[clubId]" in the new route structure, "" in the legacy structure.
+   */
+  baseHref?: string
 }
 
-export function Sidebar({ role, clubName, clubLogo, colorTheme, isAdminViewingAsSocio, mode = 'socio' }: SidebarProps) {
+export function Sidebar({
+  role,
+  clubName,
+  clubLogo,
+  colorTheme: _colorTheme,
+  isAdminViewingAsSocio,
+  mode = 'socio',
+  baseHref = '',
+}: SidebarProps) {
   const pathname = usePathname()
-  const nav = role === 'SUPER_ADMIN' ? superAdminNav : role === 'CLUB_ADMIN' ? adminNav : socioNav
 
-  // If a CLUB_ADMIN is currently in the socio view, show socio nav + admin panel link
+  // Build nav for current context
+  const adminNav = makeAdminNav(baseHref)
+  const socioNav = makeSocioNav(baseHref)
+
+  const nav = role === 'SUPER_ADMIN' ? superAdminNav : role === 'CLUB_ADMIN' ? adminNav : socioNav
   const effectiveNav = isAdminViewingAsSocio ? socioNav : nav
 
-  // Visual mode indicator: top border color signals admin vs socio context
+  // Root paths that should match exactly (not as prefix)
+  const exactRoots = [
+    `${baseHref}/admin`,
+    `${baseHref}/socio`,
+    '/superadmin',
+  ]
+
+  // Visual mode indicator
   const modeBorderClass = mode === 'admin'
     ? 'border-t-4 border-t-orange-400'
     : mode === 'socio'
@@ -112,7 +141,7 @@ export function Sidebar({ role, clubName, clubLogo, colorTheme, isAdminViewingAs
       {isAdminViewingAsSocio && (
         <div className="mx-3 mt-3">
           <Link
-            href="/admin"
+            href={`${baseHref}/admin`}
             className="flex items-center gap-2 px-3 py-2 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg text-xs font-semibold hover:bg-orange-100 transition-colors"
           >
             <ShieldCheck className="h-4 w-4 flex-shrink-0" />
@@ -124,7 +153,7 @@ export function Sidebar({ role, clubName, clubLogo, colorTheme, isAdminViewingAs
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-0.5">
         {effectiveNav.map((item) => {
-          const active = pathname === item.href || (item.href !== '/admin' && item.href !== '/socio' && pathname.startsWith(item.href))
+          const active = pathname === item.href || (!exactRoots.includes(item.href) && pathname.startsWith(item.href))
           return (
             <Link
               key={item.href}
