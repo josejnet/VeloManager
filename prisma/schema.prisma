@@ -141,6 +141,11 @@ enum AttendeeStatus {
   MAYBE
 }
 
+enum MemberProfileStatus {
+  UNREGISTERED  // pre-created by admin, no user account yet
+  LINKED        // linked to a real User account
+}
+
 // ─── Core: Users & Auth ───────────────────────────────────────────────────────
 
 model User {
@@ -172,6 +177,7 @@ model User {
   createdInvitations  ClubInvitation[]      @relation("InvitationCreator")
   targetedInvitations ClubInvitation[]      @relation("InvitationTarget")
   acceptedInvitations ClubInvitation[]      @relation("InvitationAcceptor")
+  memberProfiles      ClubMemberProfile[]
 
   @@index([email])
   @@index([role])
@@ -259,6 +265,7 @@ model Club {
   events            ClubEvent[]
   customRoles       ClubCustomRole[]
   invitations       ClubInvitation[]
+  memberProfiles    ClubMemberProfile[]
 
   @@index([active])
   @@index([sport])
@@ -291,6 +298,7 @@ model ClubMembership {
   quotas      MemberQuota[]
   customRoles ClubMemberCustomRole[]
   invitation  ClubInvitation?        @relation(fields: [invitationId], references: [id])
+  memberProfile ClubMemberProfile?
 
   @@unique([userId, clubId])
   @@index([clubId, status])          // most common query: list members of club by status
@@ -976,4 +984,48 @@ model ClubMemberCustomRole {
   customRole ClubCustomRole @relation(fields: [customRoleId], references: [id], onDelete: Cascade)
 
   @@unique([membershipId, customRoleId])
+}
+
+// ─── Member Directory (pre-registration profiles) ─────────────────────────────
+// Admin can create member profiles before the user registers.
+// When a user registers and their membership is approved, profiles auto-link by email.
+
+model ClubMemberProfile {
+  id          String              @id @default(cuid())
+  clubId      String
+
+  // Core identity
+  email       String
+  firstName   String
+  lastName    String
+  phone       String?
+
+  // Address
+  address     String?
+  city        String?
+  postalCode  String?
+
+  // Club-specific data
+  birthDate     DateTime?
+  jerseyNumber  String?
+  licenseNumber String?
+  joinDate      DateTime?
+  notes         String?            @db.Text
+
+  // Linking state
+  status        MemberProfileStatus @default(UNREGISTERED)
+  userId        String?             // set when linked to a real User account
+  membershipId  String?             @unique // set when linked to ClubMembership
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  club        Club            @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user        User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  membership  ClubMembership? @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+
+  @@unique([clubId, email])
+  @@index([clubId])
+  @@index([userId])
+  @@index([clubId, status])
 }

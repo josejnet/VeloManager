@@ -19,6 +19,7 @@ interface NavItem {
 const adminNav: NavItem[] = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Socios', href: '/admin/members', icon: Users },
+  { label: 'Directorio', href: '/admin/members/directory', icon: ClipboardList },
   { label: 'Deudas', href: '/admin/members/debt', icon: AlertCircle },
   { label: 'Contabilidad', href: '/admin/accounting', icon: Wallet },
   { label: 'Informes', href: '/admin/accounting/reports', icon: BarChart2 },

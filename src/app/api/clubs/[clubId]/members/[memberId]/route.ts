@@ -94,6 +94,26 @@ export async function PATCH(
         },
       })
 
+      // Auto-link ClubMemberProfile if one exists with matching email
+      const approvedUser = await prisma.user.findUnique({
+        where: { id: membership.userId },
+        select: { email: true },
+      })
+      if (approvedUser) {
+        await prisma.clubMemberProfile.updateMany({
+          where: {
+            clubId: params.clubId,
+            email: approvedUser.email,
+            status: 'UNREGISTERED',
+          },
+          data: {
+            status: 'LINKED',
+            userId: membership.userId,
+            membershipId: params.memberId,
+          },
+        })
+      }
+
       await writeAudit({
         clubId: params.clubId,
         userId: access.userId,
