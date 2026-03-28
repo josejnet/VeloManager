@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
     where = { ...statusFilter, ...categoryFilter }
   } else {
     const adminMemberships = await prisma.clubMembership.findMany({
-      where: { userId: auth.userId, role: 'CLUB_ADMIN', status: 'APPROVED' },
+      where: { userId: auth.userId, clubRole: 'ADMIN', status: 'APPROVED' },
       select: { clubId: true },
     })
     if (adminMemberships.length > 0) {
@@ -151,7 +151,7 @@ export async function POST(req: NextRequest) {
   if (auth.platformRole !== 'SUPER_ADMIN' && clubId) {
     // Notify all CLUB_ADMINs of that club
     const admins = await prisma.clubMembership.findMany({
-      where: { clubId, role: 'CLUB_ADMIN', status: 'APPROVED' },
+      where: { clubId, clubRole: 'ADMIN', status: 'APPROVED' },
       select: { userId: true },
     })
     await Promise.all(
@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
   } else if (auth.platformRole !== 'SUPER_ADMIN' && !clubId) {
     // Club admin escalating directly to super admin
     const membership = await prisma.clubMembership.findFirst({
-      where: { userId: auth.userId, role: 'CLUB_ADMIN', status: 'APPROVED' },
+      where: { userId: auth.userId, clubRole: 'ADMIN', status: 'APPROVED' },
       select: { clubId: true },
     })
     if (membership) {

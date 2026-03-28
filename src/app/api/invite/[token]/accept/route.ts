@@ -3,7 +3,6 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/authz'
 import { writeAudit, AUDIT } from '@/lib/audit'
 import { ok, err } from '@/lib/utils'
-import type { UserRole } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
 
@@ -128,14 +127,12 @@ export async function POST(
       // 6. Upsert membership
       const membershipStatus = willApprove ? 'APPROVED' : 'PENDING'
 
-      const assignedClubRole = inv.assignedRole === 'CLUB_ADMIN' ? 'ADMIN' as const : 'MEMBER' as const
       const newMembership = existingMembership
         ? await tx.clubMembership.update({
             where: { id: existingMembership.id },
             data: {
               status: membershipStatus,
-              role: inv.assignedRole as UserRole,
-              clubRole: assignedClubRole,
+              clubRole: inv.assignedRole,
               invitationId: inv.id,
               joinedAt: membershipStatus === 'APPROVED' ? now : undefined,
             },
@@ -145,8 +142,7 @@ export async function POST(
               userId: auth.userId,
               clubId: inv.clubId,
               status: membershipStatus,
-              role: inv.assignedRole as UserRole,
-              clubRole: assignedClubRole,
+              clubRole: inv.assignedRole,
               invitationId: inv.id,
               joinedAt: membershipStatus === 'APPROVED' ? now : undefined,
             },
@@ -159,7 +155,7 @@ export async function POST(
           select: { name: true },
         })
         const admins = await tx.clubMembership.findMany({
-          where: { clubId: inv.clubId, status: 'APPROVED', role: 'CLUB_ADMIN' },
+          where: { clubId: inv.clubId, status: 'APPROVED', clubRole: 'ADMIN' },
           select: { userId: true },
         })
         if (admins.length > 0) {

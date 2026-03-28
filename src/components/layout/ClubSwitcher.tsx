@@ -21,14 +21,14 @@ interface ClubSwitcherProps {
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  CLUB_ADMIN: 'Admin',
-  SOCIO: 'Socio',
+  ADMIN: 'Admin',
+  MEMBER: 'Socio',
   SUPER_ADMIN: 'Super',
 }
 
 const ROLE_VARIANTS: Record<string, 'success' | 'warning' | 'info' | 'default' | 'purple'> = {
-  CLUB_ADMIN: 'purple',
-  SOCIO: 'info',
+  ADMIN: 'purple',
+  MEMBER: 'info',
   SUPER_ADMIN: 'warning',
 }
 

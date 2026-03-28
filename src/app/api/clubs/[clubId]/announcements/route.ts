@@ -80,7 +80,7 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
 
   // Notify members
   const members = await prisma.clubMembership.findMany({
-    where: { clubId: params.clubId, status: 'APPROVED', role: 'SOCIO' },
+    where: { clubId: params.clubId, status: 'APPROVED', clubRole: 'MEMBER' },
     select: { userId: true },
   })
   if (members.length > 0) {

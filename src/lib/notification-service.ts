@@ -175,7 +175,7 @@ export async function notifyClubAdmins(
   input: Omit<CreateNotificationInput, 'userId'>
 ): Promise<void> {
   const memberships = await prisma.clubMembership.findMany({
-    where: { clubId, role: 'CLUB_ADMIN', status: 'APPROVED' },
+    where: { clubId, clubRole: 'ADMIN', status: 'APPROVED' },
     select: { userId: true },
   })
 

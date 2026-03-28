@@ -34,9 +34,9 @@ export async function POST(
   if (ticket.clubId) {
     const membership = await prisma.clubMembership.findUnique({
       where: { userId_clubId: { userId: auth.userId, clubId: ticket.clubId } },
-      select: { role: true, status: true },
+      select: { clubRole: true, status: true },
     })
-    if (!membership || membership.status !== 'APPROVED' || membership.role !== 'CLUB_ADMIN') {
+    if (!membership || membership.status !== 'APPROVED' || membership.clubRole !== 'ADMIN') {
       return err('Acceso denegado', 403)
     }
   } else if (ticket.creatorId !== auth.userId) {

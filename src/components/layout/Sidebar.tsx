@@ -62,7 +62,7 @@ const superAdminNav: NavItem[] = [
 ]
 
 interface SidebarProps {
-  role: 'SUPER_ADMIN' | 'CLUB_ADMIN' | 'SOCIO'
+  role: 'SUPER_ADMIN' | 'ADMIN' | 'MEMBER'
   clubName?: string
   clubLogo?: string | null
   colorTheme?: string
@@ -90,7 +90,7 @@ export function Sidebar({
   const adminNav = makeAdminNav(baseHref)
   const socioNav = makeSocioNav(baseHref)
 
-  const nav = role === 'SUPER_ADMIN' ? superAdminNav : role === 'CLUB_ADMIN' ? adminNav : socioNav
+  const nav = role === 'SUPER_ADMIN' ? superAdminNav : role === 'ADMIN' ? adminNav : socioNav
   const effectiveNav = isAdminViewingAsSocio ? socioNav : nav
 
   // Root paths that should match exactly (not as prefix)
@@ -137,7 +137,7 @@ export function Sidebar({
         </div>
       </div>
 
-      {/* Admin panel shortcut (shown when CLUB_ADMIN is in socio view) */}
+      {/* Admin panel shortcut (shown when ADMIN is in socio view) */}
       {isAdminViewingAsSocio && (
         <div className="mx-3 mt-3">
           <Link

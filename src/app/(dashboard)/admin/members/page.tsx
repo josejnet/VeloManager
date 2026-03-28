@@ -56,7 +56,7 @@ export default function MembersPage() {
 
   // Role change modal
   const [roleModal, setRoleModal] = useState<{ open: boolean; memberId: string; memberName: string; currentRole: string } | null>(null)
-  const [newRole, setNewRole] = useState<'CLUB_ADMIN' | 'SOCIO'>('SOCIO')
+  const [newRole, setNewRole] = useState<'ADMIN' | 'MEMBER'>('MEMBER')
 
   // Invitations
   const [invitations, setInvitations] = useState<Invitation[]>([])
@@ -66,7 +66,7 @@ export default function MembersPage() {
   const [invChannel, setInvChannel] = useState<'EMAIL' | 'LINK' | 'CODE'>('EMAIL')
   const [invForm, setInvForm] = useState({
     invitedEmail: '',
-    assignedRole: 'SOCIO',
+    assignedRole: 'MEMBER',
     expiresInDays: 7,
     maxUses: 1,
     note: '',
@@ -309,7 +309,7 @@ export default function MembersPage() {
                                 <Button size="sm" variant="outline" onClick={() => setQuotaModal({ open: true, membershipId: m.id, memberName: m.user.name })}>
                                   <Plus className="h-3 w-3" /> Cuota
                                 </Button>
-                                <Button size="sm" variant="ghost" onClick={() => { setRoleModal({ open: true, memberId: m.id, memberName: m.user.name, currentRole: m.role }); setNewRole(m.role === 'CLUB_ADMIN' ? 'SOCIO' : 'CLUB_ADMIN') }}>
+                                <Button size="sm" variant="ghost" onClick={() => { setRoleModal({ open: true, memberId: m.id, memberName: m.user.name, currentRole: m.clubRole }); setNewRole(m.clubRole === 'ADMIN' ? 'MEMBER' : 'ADMIN') }}>
                                   Rol
                                 </Button>
                                 <Button size="sm" variant="ghost" disabled={updatingId === m.id} onClick={() => { setConfirmAction({ open: true, memberId: m.id, memberName: m.user.name, action: 'suspend' }); setActionReason('') }}>
@@ -357,7 +357,7 @@ export default function MembersPage() {
                     </button>
                   ))}
                 </div>
-                <Button size="sm" onClick={() => { setNewInvModal(true); setGeneratedLink(null); setInvChannel('EMAIL'); setInvForm({ invitedEmail: '', assignedRole: 'SOCIO', expiresInDays: 7, maxUses: 1, note: '' }) }}>
+                <Button size="sm" onClick={() => { setNewInvModal(true); setGeneratedLink(null); setInvChannel('EMAIL'); setInvForm({ invitedEmail: '', assignedRole: 'MEMBER', expiresInDays: 7, maxUses: 1, note: '' }) }}>
                   <Plus className="h-3 w-3" /> Nueva invitación
                 </Button>
               </div>
@@ -390,7 +390,7 @@ export default function MembersPage() {
                               : <span className="text-xs text-gray-400 italic">Enlace público</span>}
                             {inv.note && <p className="text-xs text-gray-400 truncate max-w-[150px]">{inv.note}</p>}
                           </td>
-                          <td className="py-3 text-xs text-gray-500">{inv.assignedRole === 'CLUB_ADMIN' ? 'Admin' : 'Socio'}</td>
+                          <td className="py-3 text-xs text-gray-500">{inv.assignedRole === 'ADMIN' ? 'Admin' : 'Socio'}</td>
                           <td className="py-3 text-xs text-gray-500">{inv.usesCount}/{inv.maxUses ?? '∞'}</td>
                           <td className="py-3 text-xs text-gray-500">
                             {inv.expiresAt ? fmtDate(inv.expiresAt) : <span className="text-gray-400">—</span>}
@@ -469,14 +469,14 @@ export default function MembersPage() {
       {roleModal && (
         <Modal open={roleModal.open} onClose={() => setRoleModal(null)} title={`Cambiar rol — ${roleModal.memberName}`} size="sm">
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">Rol actual: <strong>{roleModal.currentRole === 'CLUB_ADMIN' ? 'Administrador' : 'Socio'}</strong></p>
+            <p className="text-sm text-gray-600">Rol actual: <strong>{roleModal.currentRole === 'ADMIN' ? 'Administrador' : 'Socio'}</strong></p>
             <Select
               label="Nuevo rol"
               value={newRole}
-              onChange={(e) => setNewRole(e.target.value as 'CLUB_ADMIN' | 'SOCIO')}
+              onChange={(e) => setNewRole(e.target.value as 'ADMIN' | 'MEMBER')}
               options={[
-                { value: 'SOCIO', label: 'Socio' },
-                { value: 'CLUB_ADMIN', label: 'Administrador' },
+                { value: 'MEMBER', label: 'Socio' },
+                { value: 'ADMIN', label: 'Administrador' },
               ]}
             />
             <div className="flex gap-2">
@@ -514,8 +514,8 @@ export default function MembersPage() {
                 value={invForm.assignedRole}
                 onChange={(e) => setInvForm({ ...invForm, assignedRole: e.target.value })}
                 options={[
-                  { value: 'SOCIO', label: 'Socio' },
-                  { value: 'CLUB_ADMIN', label: 'Administrador' },
+                  { value: 'MEMBER', label: 'Socio' },
+                  { value: 'ADMIN', label: 'Administrador' },
                 ]}
               />
 

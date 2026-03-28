@@ -18,7 +18,7 @@ export default function MessagesAdminPage() {
   const [data, setData] = useState<any>(null)
   const [page, setPage] = useState(1)
   const [modal, setModal] = useState(false)
-  const [form, setForm] = useState({ subject: '', body: '', targetRole: 'SOCIO', sendEmail: true })
+  const [form, setForm] = useState({ subject: '', body: '', targetRole: 'MEMBER', sendEmail: true })
 
   useEffect(() => {
     if (!session?.user) return
@@ -42,7 +42,7 @@ export default function MessagesAdminPage() {
       const d = await res.json()
       toast.success(`Mensaje enviado a ${d._count?.recipients ?? 0} destinatarios`)
       setModal(false)
-      setForm({ subject: '', body: '', targetRole: 'SOCIO', sendEmail: true })
+      setForm({ subject: '', body: '', targetRole: 'MEMBER', sendEmail: true })
       fetch_()
     } else {
       const d = await res.json(); toast.error(d.error ?? 'Error')
@@ -93,8 +93,8 @@ export default function MessagesAdminPage() {
           <Select label="Destinatarios" value={form.targetRole}
             onChange={(e) => setForm({ ...form, targetRole: e.target.value })}
             options={[
-              { value: 'SOCIO', label: 'Todos los socios' },
-              { value: 'CLUB_ADMIN', label: 'Solo administradores' },
+              { value: 'MEMBER', label: 'Todos los socios' },
+              { value: 'ADMIN', label: 'Solo administradores' },
               { value: 'ALL', label: 'Todos los miembros del club' },
             ]} />
           <Input label="Asunto" placeholder="Asunto del mensaje" value={form.subject}

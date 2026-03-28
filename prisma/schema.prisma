@@ -14,12 +14,6 @@ datasource db {
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
-enum UserRole {
-  SUPER_ADMIN
-  CLUB_ADMIN
-  SOCIO
-}
-
 // Phase 2 role separation — platform-level identity
 enum PlatformRole {
   SUPER_ADMIN  // platform operator
@@ -338,8 +332,7 @@ model ClubMembership {
   userId    String
   clubId    String
   status    MembershipStatus @default(PENDING)
-  role      UserRole         @default(SOCIO)
-  clubRole  ClubRole         @default(MEMBER)  // Phase 2: replaces role for club-scoped checks
+  clubRole  ClubRole         @default(MEMBER)
   joinedAt  DateTime?
   // Ban tracking
   bannedAt      DateTime?
@@ -362,7 +355,7 @@ model ClubMembership {
   @@unique([userId, clubId])
   @@index([clubId, status])          // most common query: list members of club by status
   @@index([userId])                  // all clubs a user belongs to
-  @@index([clubId, role])
+  @@index([clubId, clubRole])
   @@index([invitationId])
 }
 
@@ -385,7 +378,7 @@ model ClubInvitation {
   status          InvitationStatus  @default(PENDING)
 
   // Role assigned upon joining
-  assignedRole    UserRole          @default(SOCIO)
+  assignedRole    ClubRole          @default(MEMBER)
 
   // Usage control
   maxUses         Int?              // null = single use (email default); >1 for links
@@ -702,7 +695,7 @@ model ClubMessage {
   body       String        @db.Text
   status     MessageStatus @default(DRAFT)
   // Who receives: ALL members, specific roles, or specific users
-  targetRole UserRole?     // null = specific recipients; set = broadcast to role
+  targetRole ClubRole?     // null = specific recipients; set = broadcast to role
   sentAt     DateTime?
   createdAt  DateTime      @default(now())
 
@@ -796,7 +789,7 @@ model PlatformBanner {
   targetProvince String?    // filter by province
   targetLocality String?    // filter by locality
   targetClubIds  String[]   // specific clubs (overrides other filters)
-  targetRoles    UserRole[] // CLUB_ADMIN | SOCIO | both
+  targetRoles    ClubRole[] // ADMIN | MEMBER | both
   // Scheduling
   active         Boolean  @default(true)
   publishAt      DateTime @default(now())

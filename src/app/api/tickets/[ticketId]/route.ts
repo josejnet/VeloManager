@@ -52,7 +52,7 @@ async function getTicketWithAccess(ticketId: string, userId: string, platformRol
 
   // Check if user is admin in any club (club-scoped role)
   const adminClubs = await prisma.clubMembership.findMany({
-    where: { userId, role: 'CLUB_ADMIN', status: 'APPROVED' },
+    where: { userId, clubRole: 'ADMIN', status: 'APPROVED' },
     select: { clubId: true },
   })
   const isClubAdmin = adminClubs.length > 0
@@ -117,7 +117,7 @@ export async function PATCH(
   if (action === 'update_status' && auth.platformRole !== 'SUPER_ADMIN') {
     // Club admin or creator can update status — verify club access
     const adminClubs = await prisma.clubMembership.findMany({
-      where: { userId: auth.userId, role: 'CLUB_ADMIN', status: 'APPROVED' },
+      where: { userId: auth.userId, clubRole: 'ADMIN', status: 'APPROVED' },
       select: { clubId: true },
     })
     const clubIds = adminClubs.map((m) => m.clubId)

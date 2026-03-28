@@ -48,7 +48,7 @@ export async function PATCH(
   // Notify all members when window opens
   if (parsed.data.status === 'OPEN') {
     const members = await prisma.clubMembership.findMany({
-      where: { clubId: params.clubId, status: 'APPROVED', role: 'SOCIO' },
+      where: { clubId: params.clubId, status: 'APPROVED', clubRole: 'MEMBER' },
       select: { userId: true },
     })
     if (members.length > 0) {

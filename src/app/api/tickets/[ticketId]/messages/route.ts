@@ -42,7 +42,7 @@ export async function POST(
   let isAdmin = auth.platformRole === 'SUPER_ADMIN'
   if (!isAdmin) {
     const adminClubs = await prisma.clubMembership.findMany({
-      where: { userId: auth.userId, role: 'CLUB_ADMIN', status: 'APPROVED' },
+      where: { userId: auth.userId, clubRole: 'ADMIN', status: 'APPROVED' },
       select: { clubId: true },
     })
     const clubIds = adminClubs.map((m) => m.clubId)
@@ -127,7 +127,7 @@ export async function POST(
       }
     } else if (ticket.clubId) {
       const admins = await prisma.clubMembership.findMany({
-        where: { clubId: ticket.clubId, role: 'CLUB_ADMIN', status: 'APPROVED' },
+        where: { clubId: ticket.clubId, clubRole: 'ADMIN', status: 'APPROVED' },
         select: { userId: true },
       })
       await Promise.all(

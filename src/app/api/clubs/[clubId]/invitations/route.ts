@@ -6,7 +6,7 @@ import { requireClubAccess } from '@/lib/authz'
 import { sendEmail } from '@/lib/email'
 import { writeAudit, AUDIT } from '@/lib/audit'
 import { ok, err, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
-import type { InvitationChannel, UserRole } from '@prisma/client'
+import type { InvitationChannel, ClubRole } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,20 +14,20 @@ const CreateInvitationSchema = z.discriminatedUnion('channel', [
   z.object({
     channel: z.literal('EMAIL'),
     invitedEmail: z.string().email('Email inválido').toLowerCase(),
-    assignedRole: z.enum(['CLUB_ADMIN', 'SOCIO']).default('SOCIO'),
+    assignedRole: z.enum(['ADMIN', 'MEMBER']).default('MEMBER'),
     expiresInDays: z.number().int().min(1).max(30).optional(),
     note: z.string().max(500).optional(),
   }),
   z.object({
     channel: z.literal('LINK'),
-    assignedRole: z.enum(['CLUB_ADMIN', 'SOCIO']).default('SOCIO'),
+    assignedRole: z.enum(['ADMIN', 'MEMBER']).default('MEMBER'),
     maxUses: z.number().int().min(1).max(10000).nullable().optional(),
     expiresInDays: z.number().int().min(1).max(365).nullable().optional(),
     note: z.string().max(500).optional(),
   }),
   z.object({
     channel: z.literal('CODE'),
-    assignedRole: z.enum(['CLUB_ADMIN', 'SOCIO']).default('SOCIO'),
+    assignedRole: z.enum(['ADMIN', 'MEMBER']).default('MEMBER'),
     maxUses: z.number().int().min(1).max(10000).nullable().optional(),
     expiresInDays: z.number().int().min(1).max(365).nullable().optional(),
     note: z.string().max(500).optional(),
@@ -169,7 +169,7 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
       invitedUserId,
       token,
       channel: parsed.data.channel as InvitationChannel,
-      assignedRole: parsed.data.assignedRole as UserRole,
+      assignedRole: parsed.data.assignedRole as ClubRole,
       maxUses,
       expiresAt,
       note: 'note' in parsed.data ? (parsed.data.note ?? null) : null,

@@ -4,13 +4,13 @@ import { prisma } from '@/lib/prisma'
 import { requireClubAccess } from '@/lib/authz'
 import { sendEmail, clubMessageEmail } from '@/lib/email'
 import { ok, err, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
-import type { UserRole } from '@prisma/client'
+import type { ClubRole } from '@prisma/client'
 
 const CreateMessageSchema = z.object({
   subject: z.string().min(1).max(300),
   body: z.string().min(1),
   // Either targetRole (broadcast) or specific userIds
-  targetRole: z.enum(['CLUB_ADMIN', 'SOCIO', 'ALL']).optional(),
+  targetRole: z.enum(['ADMIN', 'MEMBER', 'ALL']).optional(),
   recipientIds: z.array(z.string()).optional(),
   sendEmail: z.boolean().default(true),
 })
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
   if (parsed.data.targetRole) {
     const roleFilter = parsed.data.targetRole === 'ALL'
       ? {}
-      : { role: parsed.data.targetRole as UserRole }
+      : { clubRole: parsed.data.targetRole as ClubRole }
 
     const memberships = await prisma.clubMembership.findMany({
       where: { clubId: params.clubId, status: 'APPROVED', ...roleFilter },
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
       senderId: access.userId,
       subject: parsed.data.subject,
       body: parsed.data.body,
-      targetRole: parsed.data.targetRole === 'ALL' ? null : (parsed.data.targetRole as UserRole | null ?? null),
+      targetRole: parsed.data.targetRole === 'ALL' ? null : (parsed.data.targetRole as ClubRole ?? null),
       status: 'SENT',
       sentAt: new Date(),
       recipients: {

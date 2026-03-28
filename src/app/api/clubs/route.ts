@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
       ]
     : memberships
 
-  const clubs = sorted.map((m) => ({ ...m.club, myRole: m.role }))
+  const clubs = sorted.map((m) => ({ ...m.club, myRole: m.clubRole }))
   return ok(buildPaginatedResponse(clubs, total, page, pageSize))
 }
 
@@ -80,12 +80,12 @@ export async function POST(req: NextRequest) {
   const club = await prisma.$transaction(async (tx) => {
     const newClub = await tx.club.create({ data: parsed.data })
 
-    // Creator becomes CLUB_ADMIN with approved membership
+    // Creator becomes club admin with approved membership
     await tx.clubMembership.create({
       data: {
         userId: auth.userId,
         clubId: newClub.id,
-        role: 'CLUB_ADMIN',
+        clubRole: 'ADMIN',
         status: 'APPROVED',
         joinedAt: new Date(),
       },

@@ -75,7 +75,7 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
           userId: user.id,
           clubId: params.clubId,
           status: 'APPROVED',
-          role: 'SOCIO',
+          clubRole: 'MEMBER',
           joinedAt: new Date(),
         },
       })

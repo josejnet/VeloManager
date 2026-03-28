@@ -16,7 +16,7 @@ export default async function AdminDashboard() {
   const userId = (session.user as { id: string }).id
 
   const membership = await prisma.clubMembership.findFirst({
-    where: { userId, status: 'APPROVED', role: 'CLUB_ADMIN' },
+    where: { userId, status: 'APPROVED', clubRole: 'ADMIN' },
     include: { club: { include: { bankAccount: true } } },
   })
 

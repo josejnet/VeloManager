@@ -38,7 +38,7 @@ interface LinkedUser {
 interface LinkedMembership {
   id: string
   status: string
-  role: string
+  clubRole: string
 }
 
 interface MemberProfile {
@@ -790,7 +790,7 @@ export default function MemberDirectoryPage() {
               {selectedProfile.membership && (
                 <div>
                   <p className="font-medium text-gray-600">Membresía</p>
-                  <p>{selectedProfile.membership.role}</p>
+                  <p>{selectedProfile.membership.clubRole}</p>
                 </div>
               )}
             </div>

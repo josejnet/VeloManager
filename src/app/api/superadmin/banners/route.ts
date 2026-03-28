@@ -16,7 +16,7 @@ const CreateBannerSchema = z.object({
   targetProvince: z.string().optional(),
   targetLocality: z.string().optional(),
   targetClubIds: z.array(z.string()).optional(),
-  targetRoles: z.array(z.enum(['CLUB_ADMIN', 'SOCIO', 'SUPER_ADMIN'])).optional(),
+  targetRoles: z.array(z.enum(['ADMIN', 'MEMBER'])).optional(),
   // Scheduling
   publishAt: z.string().datetime().optional(),
   expiresAt: z.string().datetime().nullable().optional(),

@@ -106,7 +106,6 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
           userId: auth.userId,
           clubId: params.clubId,
           status: membershipStatus,
-          role: 'SOCIO',
           clubRole: 'MEMBER',
           joinedAt: willApprove ? new Date() : undefined,
         },
@@ -133,7 +132,7 @@ async function notifyAdmins(clubId: string, applicantId: string, clubName: strin
   const [applicant, admins] = await Promise.all([
     prisma.user.findUnique({ where: { id: applicantId }, select: { name: true } }),
     prisma.clubMembership.findMany({
-      where: { clubId, status: 'APPROVED', role: 'CLUB_ADMIN' },
+      where: { clubId, status: 'APPROVED', clubRole: 'ADMIN' },
       select: { userId: true },
     }),
   ])

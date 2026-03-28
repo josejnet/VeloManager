@@ -56,7 +56,7 @@ export async function GET(req: NextRequest, { params }: { params: { clubId: stri
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
       include: {
         user: { select: { id: true, name: true, email: true, avatarUrl: true } },
-        membership: { select: { id: true, status: true, role: true } },
+        membership: { select: { id: true, status: true, clubRole: true } },
       },
     }),
     prisma.clubMemberProfile.count({ where }),
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
     },
     include: {
       user: { select: { id: true, name: true, email: true, avatarUrl: true } },
-      membership: { select: { id: true, status: true, role: true } },
+      membership: { select: { id: true, status: true, clubRole: true } },
     },
   })
 

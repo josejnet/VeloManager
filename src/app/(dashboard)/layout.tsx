@@ -23,7 +23,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const pathname = headersList.get('x-pathname') ?? headersList.get('x-invoke-path') ?? ''
 
   let club = null
-  let membershipRole: 'CLUB_ADMIN' | 'SOCIO' | null = null
+  let membershipRole: 'ADMIN' | 'MEMBER' | null = null
   let membershipId = ''
 
   if (!isSuperAdmin) {
@@ -47,7 +47,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
     if (membership) {
       club = membership.club
-      membershipRole = membership.role as 'CLUB_ADMIN' | 'SOCIO'
+      membershipRole = membership.clubRole as 'ADMIN' | 'MEMBER'
       membershipId = membership.id
 
       // Phase 4: Redirect /admin/* and /socio/* to the new URL-based structure
@@ -65,13 +65,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   const isInSocioView = pathname.startsWith('/socio')
-  const isAdminViewingAsSocio = membershipRole === 'CLUB_ADMIN' && isInSocioView
+  const isAdminViewingAsSocio = membershipRole === 'ADMIN' && isInSocioView
 
   const sidebarRole = isSuperAdmin
     ? 'SUPER_ADMIN'
     : isAdminViewingAsSocio
-      ? 'SOCIO'
-      : (membershipRole ?? 'SOCIO')
+      ? 'MEMBER'
+      : (membershipRole ?? 'MEMBER')
 
   const mode: DashboardContextValue['mode'] = isSuperAdmin
     ? 'superadmin'
@@ -85,7 +85,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     clubLogo: club?.logoUrl ?? null,
     colorTheme: club?.colorTheme ?? null,
     membershipId,
-    role: isSuperAdmin ? 'SUPER_ADMIN' : (membershipRole ?? 'SOCIO'),
+    role: isSuperAdmin ? 'SUPER_ADMIN' : (membershipRole ?? 'MEMBER'),
     mode,
     isAdminViewingAsSocio,
   }

@@ -29,7 +29,7 @@ export default async function ClubLayout({ children, params }: ClubLayoutProps) 
   const pathname = headersList.get('x-pathname') ?? headersList.get('x-invoke-path') ?? ''
 
   let club = null
-  let membershipRole: 'CLUB_ADMIN' | 'SOCIO' | null = null
+  let membershipRole: 'ADMIN' | 'MEMBER' | null = null
   let membershipId = ''
 
   if (platformRole !== 'SUPER_ADMIN') {
@@ -53,7 +53,7 @@ export default async function ClubLayout({ children, params }: ClubLayoutProps) 
     }
 
     club = membership.club
-    membershipRole = membership.role as 'CLUB_ADMIN' | 'SOCIO'
+    membershipRole = membership.clubRole as 'ADMIN' | 'MEMBER'
     membershipId = membership.id
   } else {
     // Super admin: load any club data for display
@@ -64,13 +64,13 @@ export default async function ClubLayout({ children, params }: ClubLayoutProps) 
 
   // Derive view mode from pathname
   const isInSocioView = pathname.includes('/socio')
-  const isAdminViewingAsSocio = membershipRole === 'CLUB_ADMIN' && isInSocioView
+  const isAdminViewingAsSocio = membershipRole === 'ADMIN' && isInSocioView
 
   const sidebarRole = platformRole === 'SUPER_ADMIN'
     ? 'SUPER_ADMIN'
     : isAdminViewingAsSocio
-      ? 'SOCIO'
-      : (membershipRole ?? 'SOCIO')
+      ? 'MEMBER'
+      : (membershipRole ?? 'MEMBER')
 
   const mode: DashboardContextValue['mode'] = platformRole === 'SUPER_ADMIN'
     ? 'superadmin'
@@ -84,7 +84,7 @@ export default async function ClubLayout({ children, params }: ClubLayoutProps) 
     clubLogo: club?.logoUrl ?? null,
     colorTheme: club?.colorTheme ?? null,
     membershipId,
-    role: platformRole === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : (membershipRole ?? 'SOCIO'),
+    role: platformRole === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : (membershipRole ?? 'MEMBER'),
     mode,
     isAdminViewingAsSocio,
   }

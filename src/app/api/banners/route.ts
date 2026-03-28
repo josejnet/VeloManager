@@ -24,15 +24,15 @@ export async function GET(req: NextRequest) {
     clubId
       ? prisma.clubMembership.findFirst({
           where: { userId: auth.userId, clubId, status: 'APPROVED' },
-          select: { role: true },
+          select: { clubRole: true },
         })
       : null,
   ])
 
-  // Effective role for banner targeting (uses legacy UserRole from ClubMembership)
+  // Effective role for banner targeting
   const effectiveRole = auth.platformRole === 'SUPER_ADMIN'
     ? 'SUPER_ADMIN'
-    : clubMembership?.role ?? 'SOCIO'
+    : clubMembership?.clubRole ?? 'MEMBER'
 
   let club = null
   if (clubId) {
@@ -53,8 +53,8 @@ export async function GET(req: NextRequest) {
   })
 
   const matched = allBanners.filter((b) => {
-    // Role filter (targetRoles stores UserRole values)
-    if (b.targetRoles.length > 0 && !b.targetRoles.includes(effectiveRole as never)) return false
+    // Role filter (targetRoles stores ClubRole values)
+    if (b.targetRoles.length > 0 && effectiveRole !== 'SUPER_ADMIN' && !b.targetRoles.includes(effectiveRole as never)) return false
 
     switch (b.targetType) {
       case 'ALL': return true

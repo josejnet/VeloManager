@@ -160,7 +160,7 @@ export async function GET(_req: NextRequest) {
     club: membership.club,
     membership: {
       id: membership.id,
-      role: membership.role,
+      role: membership.clubRole,
       joinedAt: membership.joinedAt,
     },
     priorities: {

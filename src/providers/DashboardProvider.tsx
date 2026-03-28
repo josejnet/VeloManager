@@ -7,10 +7,10 @@ export interface DashboardContextValue {
   clubLogo: string | null
   colorTheme: string | null
   membershipId: string
-  role: 'CLUB_ADMIN' | 'SOCIO' | 'SUPER_ADMIN'
+  role: 'ADMIN' | 'MEMBER' | 'SUPER_ADMIN'
   /** Current UI mode based on route prefix */
   mode: 'admin' | 'socio' | 'superadmin'
-  /** True when a CLUB_ADMIN is browsing /socio/* */
+  /** True when an ADMIN is browsing /socio/* */
   isAdminViewingAsSocio: boolean
 }
 
@@ -20,7 +20,7 @@ const DashboardContext = createContext<DashboardContextValue>({
   clubLogo: null,
   colorTheme: null,
   membershipId: '',
-  role: 'SOCIO',
+  role: 'MEMBER',
   mode: 'socio',
   isAdminViewingAsSocio: false,
 })

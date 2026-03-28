@@ -40,7 +40,7 @@ export function Header({ title }: HeaderProps) {
   const user = session?.user as { name?: string | null } | undefined
   const cfg = MODE_CONFIG[mode]
   const ModeIcon = cfg.icon
-  const canToggle = role === 'CLUB_ADMIN'
+  const canToggle = role === 'ADMIN'
 
   // Detect new URL structure: /clubs/[clubId]/...
   const isNewStructure = pathname.startsWith('/clubs/')
@@ -91,7 +91,7 @@ export function Header({ title }: HeaderProps) {
           {cfg.label}
         </span>
 
-        {/* Mode toggle — CLUB_ADMIN only */}
+        {/* Mode toggle — ADMIN only */}
         {canToggle && (
           <button
             onClick={handleToggle}

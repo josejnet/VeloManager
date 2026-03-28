@@ -55,7 +55,7 @@ export async function POST(
     },
     include: {
       user: { select: { id: true, name: true, email: true, avatarUrl: true } },
-      membership: { select: { id: true, status: true, role: true } },
+      membership: { select: { id: true, status: true, clubRole: true } },
     },
   })
 
