@@ -1,95 +1,113 @@
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
-import { unstable_cache } from 'next/cache'
+import { headers, cookies } from 'next/headers'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getThemeVars } from '@/lib/themes'
 import { Sidebar } from '@/components/layout/Sidebar'
-import { EmergencyAnnouncementModal } from '@/components/announcements/EmergencyAnnouncementModal'
-import { ClubProvider } from '@/context/ClubContext'
-import { SWRConfigProvider } from '@/components/providers/SWRConfigProvider'
-
-const getMembership = unstable_cache(
-  async (userId: string) =>
-    prisma.clubMembership.findFirst({
-      where: { userId, status: 'APPROVED' },
-      orderBy: { joinedAt: 'asc' },
-      select: {
-        role: true,
-        club: {
-          select: {
-            id: true,
-            name: true,
-            slogan: true,
-            sport: true,
-            logoUrl: true,
-            colorTheme: true,
-            primaryColor: true,
-            secondaryColor: true,
-          },
-        },
-      },
-    }),
-  ['layout-membership'],
-  { revalidate: 300, tags: ['layout-membership'] },
-)
+import { DashboardProvider } from '@/providers/DashboardProvider'
+import type { DashboardContextValue } from '@/providers/DashboardProvider'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions)
   if (!session?.user) redirect('/login')
 
   const userId = (session.user as { id: string }).id
-  const role = (session.user as { role: string }).role as 'SUPER_ADMIN' | 'CLUB_ADMIN' | 'SOCIO'
+
+  // Always query DB for platformRole — never trust stale JWT
+  const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { platformRole: true } })
+  const platformRole = dbUser?.platformRole ?? 'USER'
+  const isSuperAdmin = platformRole === 'SUPER_ADMIN'
+
+  const headersList = await headers()
+  const pathname = headersList.get('x-pathname') ?? headersList.get('x-invoke-path') ?? ''
 
   let club = null
-  let membershipRole: 'CLUB_ADMIN' | 'SOCIO' | null = null
+  let membershipRole: 'ADMIN' | 'MEMBER' | null = null
+  let membershipId = ''
 
-  if (role !== 'SUPER_ADMIN') {
-    const membership = await getMembership(userId)
+  if (!isSuperAdmin) {
+    const cookieStore = await cookies()
+    const activeClubId = cookieStore.get('activeClubId')?.value ?? null
+
+    let membership = activeClubId
+      ? await prisma.clubMembership.findFirst({
+          where: { userId, clubId: activeClubId, status: 'APPROVED' },
+          include: { club: true },
+        })
+      : null
+
+    if (!membership) {
+      membership = await prisma.clubMembership.findFirst({
+        where: { userId, status: 'APPROVED' },
+        orderBy: { joinedAt: 'asc' },
+        include: { club: true },
+      })
+    }
+
     if (membership) {
       club = membership.club
-      membershipRole = membership.role as 'CLUB_ADMIN' | 'SOCIO'
+      membershipRole = membership.clubRole as 'ADMIN' | 'MEMBER'
+      membershipId = membership.id
+
+      // Phase 4: Redirect /admin/* and /socio/* to the new URL-based structure
+      if (pathname.startsWith('/admin') || pathname.startsWith('/socio')) {
+        const section = pathname.startsWith('/socio') ? 'socio' : 'admin'
+        const subpath = pathname.startsWith('/socio')
+          ? pathname.slice('/socio'.length)
+          : pathname.slice('/admin'.length)
+        redirect(`/clubs/${membership.clubId}/${section}${subpath}`)
+      }
+    } else if (pathname.startsWith('/admin')) {
+      // Non-member trying to access admin — redirect to socio landing
+      redirect('/socio')
     }
   }
 
-  // Sidebar role passed from server — mode switching (admin/socio) is handled
-  // client-side in Sidebar.tsx via usePathname(), so it's always in sync with the URL
-  const sidebarRole = role === 'SUPER_ADMIN'
+  const isInSocioView = pathname.startsWith('/socio')
+  const isAdminViewingAsSocio = membershipRole === 'ADMIN' && isInSocioView
+
+  const sidebarRole = isSuperAdmin
     ? 'SUPER_ADMIN'
-    : (membershipRole ?? 'SOCIO')
+    : isAdminViewingAsSocio
+      ? 'MEMBER'
+      : (membershipRole ?? 'MEMBER')
 
-  // ── Branding: custom hex colors override the predefined theme palette ──────
-  const themeVars = getThemeVars(
-    club?.colorTheme ?? 'blue',
-    club?.primaryColor,
-    club?.secondaryColor,
-  )
+  const mode: DashboardContextValue['mode'] = isSuperAdmin
+    ? 'superadmin'
+    : isInSocioView
+      ? 'socio'
+      : 'admin'
 
-  // Show the emergency modal whenever the user is in a club context
-  const showAnnouncementModal = !!club && role !== 'SUPER_ADMIN'
+  const contextValue: DashboardContextValue = {
+    clubId: club?.id ?? '',
+    clubName: club?.name ?? '',
+    clubLogo: club?.logoUrl ?? null,
+    colorTheme: club?.colorTheme ?? null,
+    membershipId,
+    role: isSuperAdmin ? 'SUPER_ADMIN' : (membershipRole ?? 'MEMBER'),
+    mode,
+    isAdminViewingAsSocio,
+  }
+
+  const themeVars = getThemeVars(club?.colorTheme ?? 'blue')
 
   return (
-    <SWRConfigProvider>
+    <DashboardProvider value={contextValue}>
       <div className="flex h-screen overflow-hidden" style={{ cssText: themeVars } as React.CSSProperties}>
         <Sidebar
           role={sidebarRole}
           clubName={club?.name}
           clubLogo={club?.logoUrl}
           colorTheme={club?.colorTheme}
+          isAdminViewingAsSocio={isAdminViewingAsSocio}
+          mode={mode}
+          baseHref=""
         />
         <div className="flex-1 flex flex-col overflow-hidden">
-          {club ? (
-            <ClubProvider clubId={club.id} club={club}>
-              {children}
-            </ClubProvider>
-          ) : (
-            children
-          )}
+          {children}
         </div>
-
-        {/* Emergency/pending announcement modal — client component, polls independently */}
-        {showAnnouncementModal && <EmergencyAnnouncementModal clubId={club!.id} />}
       </div>
-    </SWRConfigProvider>
+    </DashboardProvider>
   )
 }

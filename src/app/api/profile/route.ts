@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/club-access'
+import { requireAuth } from '@/lib/authz'
 import { ok, err } from '@/lib/utils'
 import bcrypt from 'bcryptjs'
 
@@ -31,7 +31,7 @@ export async function GET(_req: NextRequest) {
       avatarUrl: true,
       province: true,
       locality: true,
-      role: true,
+      platformRole: true,
       createdAt: true,
       memberships: {
         include: {

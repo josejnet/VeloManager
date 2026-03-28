@@ -14,10 +14,16 @@ datasource db {
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
-enum UserRole {
-  SUPER_ADMIN
-  CLUB_ADMIN
-  SOCIO
+// Phase 2 role separation — platform-level identity
+enum PlatformRole {
+  SUPER_ADMIN  // platform operator
+  USER         // regular platform user
+}
+
+// Phase 2 role separation — club-scoped permission
+enum ClubRole {
+  ADMIN   // club administrator (was CLUB_ADMIN)
+  MEMBER  // regular club member (was SOCIO)
 }
 
 enum MembershipStatus {
@@ -25,11 +31,56 @@ enum MembershipStatus {
   APPROVED
   REJECTED
   SUSPENDED
+  BANNED       // expelled with permanent block — can only be lifted by admin
+  LEFT         // voluntary departure — may rejoin if club policy allows
+}
+
+enum ClubVisibility {
+  PUBLIC       // appears in directory, anyone can request
+  PRIVATE      // appears in directory, requires invitation or approved request
+  HIDDEN       // not in directory, only accessible via direct link/code
+}
+
+enum JoinPolicy {
+  OPEN         // auto-approved on request
+  REQUEST      // request + manual admin approval
+  INVITE_ONLY  // only users with a valid invitation can join
+}
+
+enum InvitationStatus {
+  PENDING      // sent, not yet used
+  ACCEPTED     // used, membership created
+  EXPIRED      // expiresAt passed without use
+  REVOKED      // manually cancelled by admin
+  REJECTED     // explicitly declined by the recipient
+}
+
+enum InvitationChannel {
+  EMAIL        // direct invitation to a specific email
+  LINK         // shareable public link
+  CODE         // short alphanumeric access code
 }
 
 enum TransactionType {
   INCOME
   EXPENSE
+}
+
+// Source of a bank movement — enforces idempotency and traceability
+enum MovementSource {
+  FEE        // MemberQuota payment
+  EVENT      // EventPayment (paid event registration)
+  ORDER      // OrderPayment (purchase order)
+  INVOICE    // Invoice approval (expense)
+  MANUAL     // manually entered by admin
+  ADJUSTMENT // corrective entry (reversal / amendment)
+}
+
+// Generic payment status for EventPayment and OrderPayment
+enum PaymentStatus {
+  PENDING
+  PAID
+  CANCELLED
 }
 
 enum QuotaStatus {
@@ -46,9 +97,10 @@ enum PurchaseWindowStatus {
 }
 
 enum OrderStatus {
-  PENDING
-  CONFIRMED
-  DELIVERED
+  PENDING       // placed, awaiting payment
+  PAID          // payment received — triggers BankMovement
+  CONFIRMED     // admin confirmed/preparing
+  DELIVERED     // physically delivered to member
   CANCELLED
 }
 
@@ -97,17 +149,62 @@ enum AttendeeStatus {
 
 enum AnnouncementPriority {
   NORMAL
+  HIGH
   EMERGENCY
+}
+
+enum MemberProfileStatus {
+  UNREGISTERED  // pre-created by admin, no user account yet
+  LINKED        // linked to a real User account
+}
+
+enum NotificationType {
+  EVENT_REMINDER    // upcoming event (24h / 2h before)
+  PAYMENT_DUE       // quota or order overdue
+  PAYMENT_RECEIVED  // payment confirmed
+  NEW_MEMBER        // new member joined club
+  TICKET_REPLY      // support ticket reply
+  SYSTEM            // generic platform announcement
+  PURCHASE_UPDATE   // order status changed
+}
+
+enum NotificationJobStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+enum TicketStatus {
+  OPEN          // newly created, awaiting first response
+  IN_PROGRESS   // being handled
+  WAITING       // waiting for user / club reply
+  RESOLVED      // marked solved, pending confirmation
+  CLOSED        // permanently closed
+}
+
+enum TicketPriority {
+  LOW           // FREE plan clubs or general inquiries
+  MEDIUM        // PRO plan clubs
+  HIGH          // PREMIUM plan clubs
+  URGENT        // ENTERPRISE plan clubs or critical issues
+}
+
+enum TicketCategory {
+  BILLING       // Stripe, cuotas, cobros duplicados
+  TECHNICAL     // App no carga, inscripciones fallidas
+  REPORT        // Denuncia de comportamiento
+  INQUIRY       // Consulta general
 }
 
 // ─── Core: Users & Auth ───────────────────────────────────────────────────────
 
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
+  id            String       @id @default(cuid())
+  email         String       @unique
   name          String
-  password      String?  // nullable to support OAuth-only accounts
-  role          UserRole @default(SOCIO)
+  password      String?      // nullable to support OAuth-only accounts
+  platformRole  PlatformRole @default(USER)
   avatarUrl     String?
   // Location for segmented announcements
   province      String?
@@ -127,10 +224,21 @@ model User {
   receivedMessages    ClubMessageRecipient[]
   passwordResets      PasswordReset[]
   eventAttendances    EventAttendee[]
-  announcementReads   AnnouncementRead[]
+  eventPayments       EventPayment[]
+  createdInvitations  ClubInvitation[]      @relation("InvitationCreator")
+  targetedInvitations ClubInvitation[]      @relation("InvitationTarget")
+  acceptedInvitations ClubInvitation[]      @relation("InvitationAcceptor")
+  memberProfiles      ClubMemberProfile[]
+  createdTickets         Ticket[]                  @relation("TicketCreator")
+  assignedTickets        Ticket[]                  @relation("TicketAssignee")
+  escalatedTickets       Ticket[]                  @relation("TicketEscalator")
+  ticketMessages         TicketMessage[]
+  notificationPrefs      NotificationPreference[]
+  devices                UserDevice[]
+  announcementReads      AnnouncementRead[]
 
   @@index([email])
-  @@index([role])
+  @@index([platformRole])
   @@index([province])
   @@index([locality])
 }
@@ -171,10 +279,8 @@ model Club {
   name        String
   slogan      String?
   sport       String   // from Sports master table
-  colorTheme     String   @default("blue")
-  logoUrl        String?
-  primaryColor   String?  // custom hex override e.g. "#2563eb"
-  secondaryColor String?  // custom hex override
+  colorTheme  String   @default("blue")
+  logoUrl     String?
   active      Boolean  @default(true)
   // Location metadata (for announcement segmentation)
   province    String?
@@ -187,13 +293,20 @@ model Club {
   // Description shown on public club page
   description  String?
   foundedYear  Int?
+  // Access control
+  visibility              ClubVisibility @default(PUBLIC)
+  joinPolicy              JoinPolicy     @default(REQUEST)
+  autoApprove             Boolean        @default(false)
+  inviteLinksEnabled      Boolean        @default(true)
+  defaultInviteExpiryDays Int?           @default(7)
+  defaultInviteMaxUses    Int?           @default(1)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   memberships       ClubMembership[]
   bankAccount       BankAccount?
-  incomeCategories  IncomeCategory[]
-  expenseCategories ExpenseCategory[]
+  ledgerCategories  LedgerCategory[]
+  bankMovements     BankMovement[]
   sizeGroups        SizeGroup[]
   productCategories ClubProductCategory[]
   products          Product[]
@@ -203,13 +316,16 @@ model Club {
   notifications     Notification[]
   invoices          Invoice[]
   messages          ClubMessage[]
-  clubAnnouncements ClubAnnouncement[]
-  announcementReads AnnouncementRead[]
-  sharedFiles       SharedFile[]
+  clubAnnouncements  ClubAnnouncement[]
+  announcementReads  AnnouncementRead[]
+  sharedFiles        SharedFile[]
   subscription      ClubSubscription?
   moduleAccess      ClubModuleAccess[]
   events            ClubEvent[]
   customRoles       ClubCustomRole[]
+  invitations       ClubInvitation[]
+  memberProfiles    ClubMemberProfile[]
+  tickets           Ticket[]
 
   @@index([active])
   @@index([sport])
@@ -224,8 +340,16 @@ model ClubMembership {
   userId    String
   clubId    String
   status    MembershipStatus @default(PENDING)
-  role      UserRole         @default(SOCIO)
+  clubRole  ClubRole         @default(MEMBER)
   joinedAt  DateTime?
+  // Ban tracking
+  bannedAt      DateTime?
+  bannedById    String?
+  bannedReason  String?
+  // Voluntary departure
+  leftAt        DateTime?
+  // Invitation that originated this membership (null = direct request)
+  invitationId  String?
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
 
@@ -233,102 +357,123 @@ model ClubMembership {
   club        Club                   @relation(fields: [clubId], references: [id], onDelete: Cascade)
   quotas      MemberQuota[]
   customRoles ClubMemberCustomRole[]
+  invitation  ClubInvitation?        @relation(fields: [invitationId], references: [id])
+  memberProfile ClubMemberProfile?
 
   @@unique([userId, clubId])
   @@index([clubId, status])          // most common query: list members of club by status
   @@index([userId])                  // all clubs a user belongs to
-  @@index([clubId, role])
+  @@index([clubId, clubRole])
+  @@index([invitationId])
+}
+
+// ─── Club Invitations ─────────────────────────────────────────────────────
+
+model ClubInvitation {
+  id              String            @id @default(cuid())
+  clubId          String
+
+  invitedById     String            // userId of the admin who created the invitation
+
+  // Target (null = generic link/code)
+  invitedEmail    String?           // for direct email invitations
+  invitedUserId   String?           // if the target user already exists in the platform
+
+  // Token — always present regardless of channel
+  token           String            @unique  // crypto.randomBytes(32).toString('hex')
+
+  channel         InvitationChannel @default(EMAIL)
+  status          InvitationStatus  @default(PENDING)
+
+  // Role assigned upon joining
+  assignedRole    ClubRole          @default(MEMBER)
+
+  // Usage control
+  maxUses         Int?              // null = single use (email default); >1 for links
+  usesCount       Int               @default(0)
+
+  // Expiry
+  expiresAt       DateTime?
+
+  // Traceability
+  acceptedAt        DateTime?
+  acceptedByUserId  String?
+  revokedAt         DateTime?
+  revokedById       String?
+  note              String?         // internal admin note, not shown to recipient
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  club            Club              @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  invitedBy       User              @relation("InvitationCreator", fields: [invitedById], references: [id])
+  invitedUser     User?             @relation("InvitationTarget", fields: [invitedUserId], references: [id])
+  acceptedBy      User?             @relation("InvitationAcceptor", fields: [acceptedByUserId], references: [id])
+  memberships     ClubMembership[]
+
+  @@index([clubId, status])
+  @@index([token])
+  @@index([invitedEmail])
+  @@index([clubId, channel, status])
+  @@index([expiresAt])
 }
 
 // ─── Accounting / Banking ─────────────────────────────────────────────────
 
+// BankAccount — 1:1 with Club. Acts as "accounting enabled" flag + optional metadata.
+// Balance is never stored here; it is always computed as SUM(INCOME) - SUM(EXPENSE) from BankMovement.
 model BankAccount {
   id        String   @id @default(cuid())
   clubId    String   @unique
-  balance   Decimal  @default(0) @db.Decimal(14, 2)
+  // Optional metadata (informational only)
+  bankName  String?
+  iban      String?
+  holder    String?
   updatedAt DateTime @updatedAt
 
-  club         Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
 }
 
-model IncomeCategory {
-  id        String   @id @default(cuid())
+// Unified category for both income and expense movements
+model LedgerCategory {
+  id        String          @id @default(cuid())
   clubId    String
   name      String
-  createdAt DateTime @default(now())
+  type      TransactionType // INCOME | EXPENSE
+  color     String?         // hex color for chart display, e.g. "#10b981"
+  createdAt DateTime        @default(now())
 
-  club         Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
+  club      Club           @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  movements BankMovement[]
 
-  @@index([clubId])
+  @@unique([clubId, name, type])
+  @@index([clubId, type])
 }
 
-model ExpenseCategory {
-  id        String   @id @default(cuid())
-  clubId    String
-  name      String
-  createdAt DateTime @default(now())
+// Append-only ledger — entries are NEVER modified after creation.
+// For corrections, create a new ADJUSTMENT entry.
+// Idempotency: @@unique([source, sourceId]) prevents double-recording the same payment.
+model BankMovement {
+  id          String          @id @default(cuid())
+  clubId      String
+  type        TransactionType // INCOME | EXPENSE
+  amount      Decimal         @db.Decimal(14, 2)
+  description String
+  categoryId  String?
+  source      MovementSource  @default(MANUAL)
+  sourceId    String?         // ID of the originating record (quotaId, orderId, invoiceId, eventPaymentId)
+  date        DateTime        @default(now())
+  createdAt   DateTime        @default(now())
 
-  club         Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
+  club     Club            @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  category LedgerCategory? @relation(fields: [categoryId], references: [id])
 
-  @@index([clubId])
-}
-
-model Transaction {
-  id                String          @id @default(cuid())
-  bankAccountId     String
-  clubId            String          // denormalized for efficient per-club queries
-  type              TransactionType
-  amount            Decimal         @db.Decimal(14, 2)
-  description       String
-  date              DateTime        @default(now())
-  incomeCategoryId  String?
-  expenseCategoryId String?
-  invoiceId         String?         @unique
-  quotaId           String?         @unique
-  // Deduplication: prevents double-posting the same payment source
-  sourceType        String?         // "invoice" | "quota" | "event_payment" | "order_payment" | "manual"
-  sourceId          String?         // ID of the source record
-  createdAt         DateTime        @default(now())
-
-  bankAccount     BankAccount      @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
-  incomeCategory  IncomeCategory?  @relation(fields: [incomeCategoryId], references: [id])
-  expenseCategory ExpenseCategory? @relation(fields: [expenseCategoryId], references: [id])
-  invoice         Invoice?         @relation(fields: [invoiceId], references: [id])
-  quota           MemberQuota?     @relation(fields: [quotaId], references: [id])
-
-  @@unique([sourceType, sourceId])           // dedup: one ledger entry per source
-  @@index([clubId, date(sort: Desc)])        // bank ledger: chronological view per club
-  @@index([clubId, type])                    // income vs expense filter
+  // Idempotency guard: one movement per source entity
+  @@unique([source, sourceId])
+  @@index([clubId, date(sort: Desc)])
+  @@index([clubId, type])
+  @@index([clubId, source])
   @@index([clubId, createdAt(sort: Desc)])
-}
-
-// Payment for attending a paid event (e.g. race entry fee)
-model EventPayment {
-  id        String             @id @default(cuid())
-  eventId   String
-  userId    String
-  clubId    String
-  amount    Decimal            @db.Decimal(14, 2)
-  status    EventPaymentStatus @default(PENDING)
-  paidAt    DateTime?
-  notes     String?
-  createdAt DateTime           @default(now())
-
-  event ClubEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
-  @@unique([eventId, userId])               // one payment record per attendee per event
-  @@index([clubId, status])
-  @@index([eventId])
-  @@index([userId, clubId])
-}
-
-enum EventPaymentStatus {
-  PENDING
-  PAID
-  WAIVED   // admin can waive the fee
 }
 
 model Invoice {
@@ -342,8 +487,8 @@ model Invoice {
   date        DateTime @default(now())
   createdAt   DateTime @default(now())
 
-  club        Club         @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  transaction Transaction?
+  // BankMovement is linked via source='INVOICE', sourceId=invoice.id — no direct relation needed
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
 
   @@index([clubId, approved])
   @@index([clubId, date(sort: Desc)])
@@ -356,15 +501,17 @@ model MemberQuota {
   year         Int
   amount       Decimal     @db.Decimal(14, 2)
   status       QuotaStatus @default(PENDING)
+  dueDate      DateTime?   // specific payment deadline (null = open-ended)
   paidAt       DateTime?
   createdAt    DateTime    @default(now())
 
-  membership  ClubMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
-  transaction Transaction?
+  // BankMovement is linked via source='FEE', sourceId=quota.id — no direct relation needed
+  membership ClubMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
 
   @@unique([membershipId, year])
   @@index([clubId, status])        // view all pending quotas in a club
   @@index([clubId, year])
+  @@index([clubId, dueDate])
 }
 
 // ─── Maestros ─────────────────────────────────────────────────────────────
@@ -477,6 +624,7 @@ model Order {
   user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   purchaseWindow PurchaseWindow @relation(fields: [purchaseWindowId], references: [id], onDelete: Cascade)
   items          OrderItem[]
+  payment        OrderPayment?
 
   @@index([clubId, purchaseWindowId])     // export by campaign
   @@index([clubId, status])
@@ -555,7 +703,7 @@ model ClubMessage {
   body       String        @db.Text
   status     MessageStatus @default(DRAFT)
   // Who receives: ALL members, specific roles, or specific users
-  targetRole UserRole?     // null = specific recipients; set = broadcast to role
+  targetRole ClubRole?     // null = specific recipients; set = broadcast to role
   sentAt     DateTime?
   createdAt  DateTime      @default(now())
 
@@ -628,7 +776,7 @@ model AnnouncementRead {
   id             String   @id @default(cuid())
   announcementId String
   userId         String
-  clubId         String   // denormalized for isolation queries
+  clubId         String
   confirmedAt    DateTime @default(now())
 
   announcement ClubAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
@@ -672,7 +820,7 @@ model PlatformBanner {
   targetProvince String?    // filter by province
   targetLocality String?    // filter by locality
   targetClubIds  String[]   // specific clubs (overrides other filters)
-  targetRoles    UserRole[] // CLUB_ADMIN | SOCIO | both
+  targetRoles    ClubRole[] // ADMIN | MEMBER | both
   // Scheduling
   active         Boolean  @default(true)
   publishAt      DateTime @default(now())
@@ -713,20 +861,77 @@ model AuditLog {
 // ─── Notificaciones ────────────────────────────────────────────────────────
 
 model Notification {
-  id        String   @id @default(cuid())
+  id        String           @id @default(cuid())
   userId    String
-  clubId    String
+  clubId    String?          // null for platform-wide notifications
+  type      NotificationType @default(SYSTEM)
   title     String
   message   String
-  link      String?  // optional deep-link
-  read      Boolean  @default(false)
+  link      String?          // optional deep-link
+  read      Boolean          @default(false)
+  metadata  Json?            // extra data for rich rendering (eventId, amount, etc.)
+  createdAt DateTime         @default(now())
+
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club Club? @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, type])
+}
+
+// User preferences per notification type and channel
+model NotificationPreference {
+  id     String           @id @default(cuid())
+  userId String
+  type   NotificationType
+  inApp  Boolean          @default(true)
+  push   Boolean          @default(true)
+  email  Boolean          @default(false) // opt-in: weekly digest only
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+  @@index([userId])
+}
+
+// FCM device tokens for push notifications
+model UserDevice {
+  id        String   @id @default(cuid())
+  userId    String
+  fcmToken  String   @unique
+  platform  String   // "web" | "android" | "ios"
+  userAgent String?
+  lastSeen  DateTime @default(now())
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
 
-  @@index([userId, read])                    // unread count query
-  @@index([userId, clubId, createdAt(sort: Desc)])
+  @@index([userId])
+}
+
+// Background job queue — processed by /api/cron/process-queue (Vercel Cron)
+model NotificationJob {
+  id          String                @id @default(cuid())
+  jobType     String                // "event_reminder_24h" | "event_reminder_2h" | "payment_reminder" | "weekly_digest"
+  payload     Json
+  status      NotificationJobStatus @default(PENDING)
+  scheduledAt DateTime              // when the job should run (not before)
+  processedAt DateTime?
+  error       String?
+  createdAt   DateTime              @default(now())
+
+  @@index([status, scheduledAt])
+  @@index([jobType, status])
+}
+
+// ─── Configuración global de la plataforma (singleton) ───────────────────────
+// Always one row with id = "singleton". Use upsert to create or update.
+
+model PlatformConfig {
+  id                        String   @id @default("singleton")
+  emailNotificationsEnabled Boolean  @default(false)
+  updatedAt                 DateTime @updatedAt
 }
 
 // ─── Catálogo global (maestros del sistema) ───────────────────────────────
@@ -802,6 +1007,7 @@ model ClubEvent {
   endAt        DateTime?
   allDay       Boolean   @default(false)
   maxAttendees Int?
+  price        Decimal?  @db.Decimal(14, 2)  // null = free; set = requires EventPayment
   imageUrl     String?
   published    Boolean   @default(true)
   shareToken   String?   @unique  // for public share links
@@ -811,8 +1017,8 @@ model ClubEvent {
   club          Club                @relation(fields: [clubId], references: [id], onDelete: Cascade)
   attendees     EventAttendee[]
   attachments   EventAttachment[]
-  announcements ClubAnnouncement[]
   payments      EventPayment[]
+  announcements ClubAnnouncement[]
 
   @@index([clubId, startAt])
   @@index([clubId, published])
@@ -855,6 +1061,46 @@ model EventAttendee {
   @@index([userId, clubId])
 }
 
+// ─── Event & Order Payments ───────────────────────────────────────────────
+
+// Created when a user registers for a paid event.
+// BankMovement linked via source='EVENT', sourceId=eventPayment.id
+model EventPayment {
+  id        String        @id @default(cuid())
+  eventId   String
+  userId    String
+  clubId    String        // denormalized
+  amount    Decimal       @db.Decimal(14, 2)
+  status    PaymentStatus @default(PENDING)
+  paidAt    DateTime?
+  notes     String?
+  createdAt DateTime      @default(now())
+
+  event ClubEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])       // one payment record per user per event
+  @@index([clubId, status])
+  @@index([eventId])
+}
+
+// Created when an admin marks an order as paid.
+// BankMovement linked via source='ORDER', sourceId=orderPayment.id
+model OrderPayment {
+  id        String        @id @default(cuid())
+  orderId   String        @unique
+  clubId    String        // denormalized
+  amount    Decimal       @db.Decimal(14, 2)
+  status    PaymentStatus @default(PENDING)
+  paidAt    DateTime?
+  note      String?
+  createdAt DateTime      @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([clubId, status])
+}
+
 // ─── Roles personalizados dentro del club ────────────────────────────────
 
 model ClubCustomRole {
@@ -880,6 +1126,106 @@ model ClubMemberCustomRole {
   customRole ClubCustomRole @relation(fields: [customRoleId], references: [id], onDelete: Cascade)
 
   @@unique([membershipId, customRoleId])
+}
+
+// ─── Member Directory (pre-registration profiles) ─────────────────────────────
+// Admin can create member profiles before the user registers.
+// When a user registers and their membership is approved, profiles auto-link by email.
+
+model ClubMemberProfile {
+  id          String              @id @default(cuid())
+  clubId      String
+
+  // Core identity
+  email       String
+  firstName   String
+  lastName    String
+  phone       String?
+
+  // Address
+  address     String?
+  city        String?
+  postalCode  String?
+
+  // Club-specific data
+  birthDate     DateTime?
+  jerseyNumber  String?
+  licenseNumber String?
+  joinDate      DateTime?
+  notes         String?            @db.Text
+
+  // Linking state
+  status        MemberProfileStatus @default(UNREGISTERED)
+  userId        String?             // set when linked to a real User account
+  membershipId  String?             @unique // set when linked to ClubMembership
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  club        Club            @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user        User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  membership  ClubMembership? @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+
+  @@unique([clubId, email])
+  @@index([clubId])
+  @@index([userId])
+  @@index([clubId, status])
+}
+
+// ─── Soporte y Ticketing ──────────────────────────────────────────────────────
+
+model Ticket {
+  id            String         @id @default(cuid())
+  code          String         @unique  // e.g. TK-0042 for quick reference
+
+  subject       String
+  description   String         @db.Text
+  status        TicketStatus   @default(OPEN)
+  priority      TicketPriority @default(LOW)
+  category      TicketCategory
+
+  // Scope: who created it and in which club context
+  creatorId     String
+  clubId        String?        // null = platform-level ticket (Club_ADMIN → SuperAdmin)
+
+  // Assignment & escalation
+  assignedToId  String?        // SuperAdmin userId handling this ticket
+  escalatedAt   DateTime?
+  escalatedById String?
+
+  // Device / app metadata snapshot at creation time
+  metadata      Json?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  creator    User          @relation("TicketCreator",   fields: [creatorId],    references: [id])
+  club       Club?         @relation(fields: [clubId],  references: [id], onDelete: SetNull)
+  assignedTo User?         @relation("TicketAssignee",  fields: [assignedToId], references: [id])
+  escalatedBy User?        @relation("TicketEscalator", fields: [escalatedById],references: [id])
+  messages   TicketMessage[]
+
+  @@index([creatorId])
+  @@index([clubId, status])
+  @@index([status, priority])
+  @@index([assignedToId])
+}
+
+model TicketMessage {
+  id          String   @id @default(cuid())
+  ticketId    String
+  senderId    String
+  body        String   @db.Text
+  attachments String[] // URLs to uploaded files (S3 / Cloudinary)
+  isInternal  Boolean  @default(false) // internal notes — only visible to admins
+
+  createdAt DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender User   @relation(fields: [senderId], references: [id])
+
+  @@index([ticketId])
+  @@index([senderId])
 }
 
 // ─── Publicidad y Patrocinios (Ad Server) ────────────────────────────────

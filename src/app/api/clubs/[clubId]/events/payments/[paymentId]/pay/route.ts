@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { ok, err } from '@/lib/utils'
 import { createLedgerEntry } from '@/lib/ledger'
 import { writeAudit } from '@/lib/audit'
@@ -11,7 +11,7 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: { clubId: string; paymentId: string } },
 ) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const payment = await prisma.eventPayment.findFirst({
@@ -20,7 +20,7 @@ export async function POST(
   })
   if (!payment) return err('Pago no encontrado', 404)
   if (payment.status === 'PAID') return err('Este pago ya fue registrado', 409)
-  if (payment.status === 'WAIVED') return err('Este pago fue condonado y no puede pagarse', 400)
+  if (payment.status === 'CANCELLED') return err('Este pago fue cancelado y no puede pagarse', 400)
 
   // Atomic: mark payment as PAID + create ledger entry (dedup via sourceType+sourceId)
   const result = await prisma.$transaction(async (tx) => {

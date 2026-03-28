@@ -1,49 +1,68 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { ok, err, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/clubs/[clubId]/accounting/bank
-// Returns bank account + paginated ledger (all transactions, newest first)
+// Returns computed balance (from BankMovement ledger) + paginated movements
 export async function GET(req: NextRequest, { params }: { params: { clubId: string } }) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const { page, pageSize, skip, take } = getPaginationParams(req.nextUrl.searchParams)
-  const type = req.nextUrl.searchParams.get('type') // INCOME | EXPENSE | null
+  const type = req.nextUrl.searchParams.get('type') as 'INCOME' | 'EXPENSE' | null
+  const source = req.nextUrl.searchParams.get('source') ?? undefined
+
+  // Ensure bank account exists (accounting must be enabled for the club)
+  const bankAccount = await prisma.bankAccount.findUnique({ where: { clubId: params.clubId } })
+  if (!bankAccount) return err('Cuenta bancaria no encontrada', 404)
 
   const where = {
     clubId: params.clubId,
-    ...(type ? { type: type as 'INCOME' | 'EXPENSE' } : {}),
+    ...(type ? { type } : {}),
+    ...(source ? { source: source as never } : {}),
   }
 
-  const [bankAccount, transactions, total] = await Promise.all([
-    prisma.bankAccount.findUnique({ where: { clubId: params.clubId } }),
-    prisma.transaction.findMany({
+  // Compute balance via aggregation — never stored, always authoritative
+  const [incomeAgg, expenseAgg, movements, total] = await Promise.all([
+    prisma.bankMovement.aggregate({
+      where: { clubId: params.clubId, type: 'INCOME' },
+      _sum: { amount: true },
+    }),
+    prisma.bankMovement.aggregate({
+      where: { clubId: params.clubId, type: 'EXPENSE' },
+      _sum: { amount: true },
+    }),
+    prisma.bankMovement.findMany({
       where,
       skip,
       take,
       orderBy: { date: 'desc' },
       include: {
-        incomeCategory: true,
-        expenseCategory: true,
-        invoice: { select: { id: true, supplier: true, fileUrl: true } },
-        quota: {
-          include: {
-            membership: {
-              include: { user: { select: { name: true, email: true } } },
-            },
-          },
-        },
+        category: true,
       },
     }),
-    prisma.transaction.count({ where }),
+    prisma.bankMovement.count({ where }),
   ])
 
-  if (!bankAccount) return err('Cuenta bancaria no encontrada', 404)
+  const totalIncome = Number(incomeAgg._sum.amount ?? 0)
+  const totalExpense = Number(expenseAgg._sum.amount ?? 0)
+  const balance = totalIncome - totalExpense
 
   return ok({
-    bankAccount,
-    ledger: buildPaginatedResponse(transactions, total, page, pageSize),
+    bankAccount: {
+      id: bankAccount.id,
+      clubId: bankAccount.clubId,
+      bankName: bankAccount.bankName,
+      iban: bankAccount.iban,
+      holder: bankAccount.holder,
+      // Computed — authoritative
+      balance,
+      totalIncome,
+      totalExpense,
+    },
+    ledger: buildPaginatedResponse(movements, total, page, pageSize),
   })
 }

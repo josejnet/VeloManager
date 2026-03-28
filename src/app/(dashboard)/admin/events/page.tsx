@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
-import { useClub } from '@/context/ClubContext'
+import React, { useState, useEffect, useCallback } from 'react'
+import { useSession } from 'next-auth/react'
 import { Header } from '@/components/layout/Header'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -29,6 +29,11 @@ import {
   Copy,
   Mail,
   X,
+  CreditCard,
+  Euro,
+  CheckCircle2,
+  Clock,
+  XCircle,
 } from 'lucide-react'
 import {
   startOfMonth,
@@ -55,10 +60,23 @@ interface ClubEvent {
   startAt: string
   endAt: string | null
   maxAttendees: number | null
+  price: number | null
   imageUrl: string | null
   published: boolean
   _count?: { attendees: number }
   attendees?: { id: string; user: { name: string | null; email: string } }[]
+}
+
+type PaymentStatus = 'PENDING' | 'PAID' | 'CANCELLED'
+
+interface EventPayment {
+  id: string
+  userId: string
+  amount: number
+  status: PaymentStatus
+  paidAt: string | null
+  createdAt: string
+  user: { id: string; name: string | null; email: string; avatarUrl: string | null }
 }
 
 interface Attachment {
@@ -84,15 +102,23 @@ const defaultForm = {
   startAt: '',
   endAt: '',
   maxAttendees: '',
+  price: '',
   imageUrl: '',
   published: false,
+}
+
+const PAYMENT_STATUS_CONFIG: Record<PaymentStatus, { label: string; icon: React.ReactNode; className: string }> = {
+  PENDING:   { label: 'Pendiente', icon: <Clock className="h-3.5 w-3.5" />,        className: 'bg-amber-50 text-amber-700 border border-amber-200' },
+  PAID:      { label: 'Pagado',    icon: <CheckCircle2 className="h-3.5 w-3.5" />, className: 'bg-green-50 text-green-700 border border-green-200' },
+  CANCELLED: { label: 'Cancelado', icon: <XCircle className="h-3.5 w-3.5" />,      className: 'bg-gray-100 text-gray-500 border border-gray-200' },
 }
 
 type ViewMode = 'calendar' | 'list'
 type ModalMode = 'create' | 'edit' | 'detail' | 'share' | null
 
 export default function AdminEventsPage() {
-  const { clubId } = useClub()
+  const { data: session } = useSession()
+  const [clubId, setClubId] = useState('')
   const [events, setEvents] = useState<ClubEvent[]>([])
   const [loading, setLoading] = useState(false)
   const [view, setView] = useState<ViewMode>('calendar')
@@ -111,6 +137,11 @@ export default function AdminEventsPage() {
   const [newAttachUrl, setNewAttachUrl] = useState('')
   const [addingAttach, setAddingAttach] = useState(false)
 
+  // Payments panel
+  const [payments, setPayments] = useState<EventPayment[]>([])
+  const [paymentsLoading, setPaymentsLoading] = useState(false)
+  const [markingPaymentId, setMarkingPaymentId] = useState<string | null>(null)
+
   // Share modal
   const [shareLink, setShareLink] = useState('')
   const [shareEmails, setShareEmails] = useState('')
@@ -118,12 +149,17 @@ export default function AdminEventsPage() {
   const [shareSending, setShareSending] = useState(false)
   const [shareLoading, setShareLoading] = useState(false)
 
+  useEffect(() => {
+    if (!session?.user) return
+    fetch('/api/clubs?pageSize=1')
+      .then((r) => r.json())
+      .then((d) => { if (d.data?.[0]) setClubId(d.data[0].id) })
+  }, [session])
+
   const fetchEvents = useCallback(async () => {
     if (!clubId) return
     setLoading(true)
-    const from = format(startOfMonth(currentMonth), "yyyy-MM-dd")
-    const to = format(endOfMonth(currentMonth), "yyyy-MM-dd")
-    const res = await fetch(`/api/clubs/${clubId}/events?from=${from}&to=${to}&pageSize=100`)
+    const res = await fetch(`/api/clubs/${clubId}/events?pageSize=200`)
     if (res.ok) {
       const d = await res.json()
       setEvents(d.data ?? d)
@@ -157,6 +193,7 @@ export default function AdminEventsPage() {
     setSelectedEvent(ev)
     setModalMode('detail')
     setAttachments([])
+    setPayments([])
     setAttachLoading(true)
     try {
       const res = await fetch(`/api/clubs/${clubId}/events/${ev.id}/attachments`)
@@ -166,6 +203,18 @@ export default function AdminEventsPage() {
       }
     } finally {
       setAttachLoading(false)
+    }
+    if (ev.price && ev.price > 0) {
+      setPaymentsLoading(true)
+      try {
+        const res = await fetch(`/api/clubs/${clubId}/events/${ev.id}/payments`)
+        if (res.ok) {
+          const d = await res.json()
+          setPayments(d.payments ?? [])
+        }
+      } finally {
+        setPaymentsLoading(false)
+      }
     }
   }
 
@@ -179,6 +228,7 @@ export default function AdminEventsPage() {
       startAt: ev.startAt ? ev.startAt.slice(0, 16) : '',
       endAt: ev.endAt ? ev.endAt.slice(0, 16) : '',
       maxAttendees: ev.maxAttendees?.toString() ?? '',
+      price: ev.price?.toString() ?? '',
       imageUrl: ev.imageUrl ?? '',
       published: ev.published,
     })
@@ -196,7 +246,7 @@ export default function AdminEventsPage() {
       const res = await fetch(`/api/clubs/${clubId}/events/${ev.id}/share`, { method: 'POST' })
       if (res.ok) {
         const d = await res.json()
-        setShareLink(d.shareUrl ?? d.url ?? `${window.location.origin}/events/share/${d.shareToken}`)
+        setShareLink(d.shareUrl ?? (d.shareToken ? `${window.location.origin}/events/${d.shareToken}` : ''))
       } else {
         toast.error('No se pudo obtener el enlace')
       }
@@ -225,6 +275,7 @@ export default function AdminEventsPage() {
       published: form.published,
     }
     if (form.maxAttendees) body.maxAttendees = parseInt(form.maxAttendees)
+    if (form.price) body.price = parseFloat(form.price)
     const res = await fetch(`/api/clubs/${clubId}/events`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -256,6 +307,7 @@ export default function AdminEventsPage() {
       published: form.published,
     }
     if (form.maxAttendees) body.maxAttendees = parseInt(form.maxAttendees)
+    body.price = form.price ? parseFloat(form.price) : null
     const res = await fetch(`/api/clubs/${clubId}/events/${selectedEvent.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -364,6 +416,28 @@ export default function AdminEventsPage() {
     setShareSending(false)
   }
 
+  // ── Payment management ────────────────────────────────────────────────────
+  const markPaymentPaid = async (payment: EventPayment) => {
+    if (!selectedEvent) return
+    setMarkingPaymentId(payment.id)
+    try {
+      const res = await fetch(`/api/clubs/${clubId}/events/${selectedEvent.id}/payments/${payment.id}`, {
+        method: 'POST',
+      })
+      if (res.ok) {
+        toast.success(`Pago de ${payment.user.name ?? payment.user.email} registrado`)
+        setPayments((prev) =>
+          prev.map((p) => p.id === payment.id ? { ...p, status: 'PAID', paidAt: new Date().toISOString() } : p)
+        )
+      } else {
+        const d = await res.json()
+        toast.error(d.error ?? 'Error al registrar pago')
+      }
+    } finally {
+      setMarkingPaymentId(null)
+    }
+  }
+
   // ── Form component ────────────────────────────────────────────────────────
   const EventForm = ({ onSubmit, submitLabel }: { onSubmit: () => void; submitLabel: string }) => (
     <div className="space-y-4">
@@ -427,6 +501,15 @@ export default function AdminEventsPage() {
           placeholder="Sin límite"
         />
         <Input
+          label="Precio (€)"
+          type="number"
+          value={form.price}
+          onChange={(e) => setForm({ ...form, price: e.target.value })}
+          placeholder="Gratuito"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <Input
           label="URL de imagen"
           type="url"
           value={form.imageUrl}
@@ -461,7 +544,7 @@ export default function AdminEventsPage() {
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title="Eventos" />
+      <Header title="Eventos" clubId={clubId} />
       <main className="flex-1 p-6 space-y-4">
 
         {/* Toolbar */}
@@ -642,6 +725,12 @@ export default function AdminEventsPage() {
                                   {ev.maxAttendees ? ` / ${ev.maxAttendees} máx` : ''}
                                 </span>
                               </div>
+                              {ev.price && ev.price > 0 && (
+                                <div className="flex items-center gap-1.5">
+                                  <Euro className="h-3.5 w-3.5 shrink-0 text-primary" />
+                                  <span className="font-medium text-primary">{Number(ev.price).toFixed(2)} €</span>
+                                </div>
+                              )}
                             </div>
                           </button>
                           <div className="flex items-center gap-1 px-4 pb-4 pt-2 border-t border-gray-100">
@@ -717,6 +806,12 @@ export default function AdminEventsPage() {
                   {selectedEvent.maxAttendees ? ` / ${selectedEvent.maxAttendees} máx` : ''}
                 </span>
               </div>
+              {selectedEvent.price && selectedEvent.price > 0 && (
+                <div className="flex items-center gap-2">
+                  <Euro className="h-4 w-4 text-gray-400 shrink-0" />
+                  <span className="font-semibold text-primary">{Number(selectedEvent.price).toFixed(2)} € por persona</span>
+                </div>
+              )}
             </div>
 
             {selectedEvent.description && (
@@ -734,6 +829,56 @@ export default function AdminEventsPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Payments panel — only for paid events */}
+            {selectedEvent.price && selectedEvent.price > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                  <CreditCard className="h-3.5 w-3.5" />
+                  Pagos
+                  {payments.length > 0 && (
+                    <span className="ml-auto text-xs font-normal text-gray-400">
+                      {payments.filter((p) => p.status === 'PAID').length}/{payments.length} pagados
+                    </span>
+                  )}
+                </h4>
+                {paymentsLoading ? (
+                  <p className="text-xs text-gray-400">Cargando pagos...</p>
+                ) : payments.length === 0 ? (
+                  <p className="text-xs text-gray-400">Aún nadie se ha apuntado</p>
+                ) : (
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {payments.map((p) => {
+                      const cfg = PAYMENT_STATUS_CONFIG[p.status]
+                      return (
+                        <div key={p.id} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-800 truncate">
+                              {p.user.name ?? p.user.email}
+                            </p>
+                            <p className="text-xs text-gray-400">{Number(p.amount).toFixed(2)} €</p>
+                          </div>
+                          <span className={cn('flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full', cfg.className)}>
+                            {cfg.icon}
+                            {cfg.label}
+                          </span>
+                          {p.status === 'PENDING' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              loading={markingPaymentId === p.id}
+                              onClick={() => markPaymentPaid(p)}
+                            >
+                              Marcar pagado
+                            </Button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )}
 

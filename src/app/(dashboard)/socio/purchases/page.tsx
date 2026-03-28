@@ -59,23 +59,11 @@ export default function SocioPurchasesPage() {
 
   const fetchMyOrders = useCallback(async () => {
     if (!clubId) return
-    // Fetch all windows then retrieve current user's orders from each.
-    // The orders endpoint now correctly filters by userId for SOCIOs.
-    const wRes = await fetch(`/api/clubs/${clubId}/purchases/windows?pageSize=50`)
-    if (!wRes.ok) return
-    const wData = await wRes.json()
-    const allWindows: any[] = wData.data ?? []
-    // Fetch orders in parallel instead of sequentially for better performance
-    const results = await Promise.allSettled(
-      allWindows.map((w) =>
-        fetch(`/api/clubs/${clubId}/purchases/windows/${w.id}/orders`)
-          .then((r) => r.ok ? r.json() : { data: [] })
-          .then((d) => (d.data ?? []).map((o: any) => ({ ...o, windowName: w.name })))
-          .catch(() => [])
-      )
-    )
-    const orders = results.flatMap((r) => r.status === 'fulfilled' ? r.value : [])
-    setMyOrders(orders)
+    const res = await fetch(`/api/clubs/${clubId}/orders?pageSize=50`)
+    if (res.ok) {
+      const d = await res.json()
+      setMyOrders(d.data ?? [])
+    }
   }, [clubId])
 
   useEffect(() => { fetchData(); fetchMyOrders() }, [fetchData, fetchMyOrders])
@@ -173,8 +161,8 @@ export default function SocioPurchasesPage() {
                     {w.products?.map(({ product }: any) => (
                       <div key={product.id} className="border border-gray-100 rounded-xl overflow-hidden">
                         <div className="h-32 bg-gray-50 flex items-center justify-center">
-                          {product.imageUrl
-                            ? <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+                          {product.images?.[0]
+                            ? <img src={product.images?.[0]} alt={product.name} className="h-full w-full object-cover" />
                             : <Package className="h-8 w-8 text-gray-300" />}
                         </div>
                         <div className="p-3">
@@ -204,7 +192,7 @@ export default function SocioPurchasesPage() {
                   <div key={order.id} className="border border-gray-100 rounded-xl p-4">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="font-semibold text-gray-900">{order.windowName}</p>
+                        <p className="font-semibold text-gray-900">{order.purchaseWindow?.name}</p>
                         <p className="text-xs text-gray-400">{fmtDate(order.createdAt)}</p>
                         <div className="mt-2 space-y-1">
                           {order.items?.map((item: any) => (
@@ -249,8 +237,8 @@ export default function SocioPurchasesPage() {
                   <button key={product.id} onClick={() => addToCart(product)}
                     className="flex items-center gap-2 p-2.5 border border-gray-100 rounded-xl hover:bg-gray-50 text-left">
                     <div className="h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      {product.imageUrl
-                        ? <img src={product.imageUrl} alt="" className="h-10 w-10 rounded-lg object-cover" />
+                      {product.images?.[0]
+                        ? <img src={product.images?.[0]} alt="" className="h-10 w-10 rounded-lg object-cover" />
                         : <Package className="h-5 w-5 text-gray-300" />}
                     </div>
                     <div>

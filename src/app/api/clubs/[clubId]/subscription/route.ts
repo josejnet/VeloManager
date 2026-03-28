@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess, requireSuperAdmin } from '@/lib/club-access'
+import { requireClubAccess, requireSuperAdmin } from '@/lib/authz'
 import { ok, err } from '@/lib/utils'
 import { PLAN_MEMBER_LIMITS } from '@/lib/modules'
 import type { SubscriptionPlan } from '@prisma/client'
@@ -9,7 +9,7 @@ import type { SubscriptionPlan } from '@prisma/client'
 // GET /api/clubs/[clubId]/subscription
 // Returns the club's ClubSubscription (plan, memberLimit, validFrom, validTo) + actual member count
 export async function GET(_req: NextRequest, { params }: { params: { clubId: string } }) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const [subscription, memberCount] = await Promise.all([

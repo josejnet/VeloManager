@@ -21,6 +21,10 @@ import {
   Copy,
   Download,
   ExternalLink,
+  Euro,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
 } from 'lucide-react'
 import { AdSlot } from '@/components/ads/AdSlot'
 import {
@@ -48,6 +52,8 @@ interface Attachment {
   url: string
 }
 
+type PaymentStatus = 'PENDING' | 'PAID' | 'CANCELLED'
+
 interface ClubEvent {
   id: string
   title: string
@@ -57,6 +63,7 @@ interface ClubEvent {
   startAt: string
   endAt: string | null
   maxAttendees: number | null
+  price: number | null
   published: boolean
   imageUrl?: string | null
   _count: { attendees: number }
@@ -94,6 +101,10 @@ export default function SocioEventsPage() {
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [attachLoading, setAttachLoading] = useState(false)
   const [rsvpLoading, setRsvpLoading] = useState(false)
+
+  // Payment status for current event detail
+  const [myPayment, setMyPayment] = useState<{ status: PaymentStatus; amount: number } | null>(null)
+  const [paymentLoading, setPaymentLoading] = useState(false)
 
   // Share modal
   const [shareOpen, setShareOpen] = useState(false)
@@ -137,6 +148,7 @@ export default function SocioEventsPage() {
     setSelectedEvent(ev)
     setDetailOpen(true)
     setAttachments([])
+    setMyPayment(null)
     setAttachLoading(true)
     try {
       const res = await fetch(`/api/clubs/${clubId}/events/${ev.id}/attachments`)
@@ -146,6 +158,18 @@ export default function SocioEventsPage() {
       }
     } finally {
       setAttachLoading(false)
+    }
+    if (ev.price && ev.price > 0) {
+      setPaymentLoading(true)
+      try {
+        const res = await fetch(`/api/clubs/${clubId}/events/${ev.id}/attend`)
+        if (res.ok) {
+          const d = await res.json()
+          if (d.payment) setMyPayment({ status: d.payment.status, amount: Number(d.payment.amount) })
+        }
+      } finally {
+        setPaymentLoading(false)
+      }
     }
   }
 
@@ -163,6 +187,7 @@ export default function SocioEventsPage() {
         body: JSON.stringify({ status }),
       })
       if (res.ok) {
+        const d = await res.json()
         toast.success(status === 'GOING' ? '¡Apuntado!' : status === 'NOT_GOING' ? 'Marcado como no asistirás' : 'Respuesta guardada')
         const updateEvent = (ev: ClubEvent): ClubEvent => {
           if (ev.id !== eventId) return ev
@@ -173,6 +198,12 @@ export default function SocioEventsPage() {
         }
         setEvents((prev) => prev.map(updateEvent))
         setSelectedEvent((prev) => prev ? updateEvent(prev) : prev)
+        // Update payment status from response
+        if (d.payment) {
+          setMyPayment({ status: d.payment.status, amount: Number(d.payment.amount) })
+        } else if (status === 'NOT_GOING') {
+          setMyPayment(null)
+        }
       } else {
         const d = await res.json()
         toast.error(d.error ?? 'Error al guardar respuesta')
@@ -190,8 +221,7 @@ export default function SocioEventsPage() {
       const res = await fetch(`/api/clubs/${clubId}/events/${ev.id}/share`, { method: 'POST' })
       if (res.ok) {
         const d = await res.json()
-        const token = d.shareToken ?? d.token ?? ''
-        setShareLink(token ? `${window.location.origin}/events/shared/${token}` : '')
+        setShareLink(d.shareUrl ?? (d.shareToken ? `${window.location.origin}/events/${d.shareToken}` : ''))
       }
     } finally {
       setShareLoading(false)
@@ -433,6 +463,12 @@ export default function SocioEventsPage() {
                                   : ''}
                                 {ev.maxAttendees ? ` / ${ev.maxAttendees} máx` : ''}
                               </span>
+                              {ev.price && ev.price > 0 && (
+                                <span className="flex items-center gap-1 font-medium text-primary">
+                                  <Euro className="h-3 w-3" />
+                                  {Number(ev.price).toFixed(2)} €
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -495,7 +531,35 @@ export default function SocioEventsPage() {
                   {selectedEvent.maxAttendees ? ` / ${selectedEvent.maxAttendees} máx` : ''}
                 </span>
               </div>
+              {selectedEvent.price && selectedEvent.price > 0 && (
+                <div className="flex items-center gap-2">
+                  <Euro className="h-4 w-4 text-gray-400 shrink-0" />
+                  <span className="font-semibold text-primary">{Number(selectedEvent.price).toFixed(2)} € por persona</span>
+                </div>
+              )}
             </div>
+
+            {/* Payment status banner */}
+            {selectedEvent.price && selectedEvent.price > 0 && (
+              paymentLoading ? (
+                <p className="text-xs text-gray-400">Verificando estado de pago...</p>
+              ) : myPayment?.status === 'PAID' ? (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-700">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  Pago confirmado — {Number(myPayment.amount).toFixed(2)} €
+                </div>
+              ) : myPayment?.status === 'PENDING' ? (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-700">
+                  <Clock className="h-4 w-4 shrink-0" />
+                  Pago pendiente ({Number(myPayment.amount).toFixed(2)} €) — el administrador lo registrará en breve
+                </div>
+              ) : selectedEvent.attendees[0]?.status !== 'GOING' ? (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-700">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  Este evento tiene un coste de {Number(selectedEvent.price).toFixed(2)} €. Al confirmar asistencia se generará un pago pendiente.
+                </div>
+              ) : null
+            )}
 
             {/* Description */}
             {selectedEvent.description && (

@@ -15,9 +15,9 @@ export default async function LandingPage() {
     const userId = (session.user as { id: string }).id
     const membership = await prisma.clubMembership.findFirst({
       where: { userId, status: 'APPROVED' },
-      select: { role: true },
+      select: { clubRole: true },
     })
-    if (membership) redirect('/socio')
+    if (membership) redirect(membership.clubRole === 'ADMIN' ? '/admin' : '/socio')
 
     // Authenticated but no club yet
     redirect('/clubs/join')

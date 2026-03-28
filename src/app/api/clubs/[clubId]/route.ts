@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { writeAudit, AUDIT } from '@/lib/audit'
 import { ok, err } from '@/lib/utils'
 
@@ -13,6 +13,13 @@ const UpdateClubSchema = z.object({
   logoUrl: z.string().url().optional().nullable(),
   primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().nullable(),
   secondaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().nullable(),
+  // Access control
+  visibility: z.enum(['PUBLIC', 'PRIVATE', 'HIDDEN']).optional(),
+  joinPolicy: z.enum(['OPEN', 'REQUEST', 'INVITE_ONLY']).optional(),
+  autoApprove: z.boolean().optional(),
+  inviteLinksEnabled: z.boolean().optional(),
+  defaultInviteExpiryDays: z.number().int().min(1).max(365).nullable().optional(),
+  defaultInviteMaxUses: z.number().int().min(1).max(10000).nullable().optional(),
 })
 
 // GET /api/clubs/[clubId]
@@ -24,8 +31,7 @@ export async function GET(_req: NextRequest, { params }: { params: { clubId: str
     where: { id: params.clubId },
     include: {
       bankAccount: true,
-      incomeCategories: true,
-      expenseCategories: true,
+      ledgerCategories: true,
       sizeGroups: true,
       _count: {
         select: {
@@ -44,7 +50,7 @@ export async function GET(_req: NextRequest, { params }: { params: { clubId: str
 
 // PATCH /api/clubs/[clubId]
 export async function PATCH(req: NextRequest, { params }: { params: { clubId: string } }) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const body = await req.json().catch(() => null)

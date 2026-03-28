@@ -26,7 +26,7 @@ export default function SuperAdminUsersPage() {
 
   const updateRole = async (userId: string, role: string) => {
     const res = await fetch(`/api/superadmin/users?userId=${userId}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role }),
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ platformRole: role }),
     })
     if (res.ok) { toast.success('Rol actualizado'); fetch_() }
     else toast.error('Error')
@@ -35,8 +35,7 @@ export default function SuperAdminUsersPage() {
   const roleOptions = [
     { value: '', label: 'Todos los roles' },
     { value: 'SUPER_ADMIN', label: 'Super Admin' },
-    { value: 'CLUB_ADMIN', label: 'Admin de club' },
-    { value: 'SOCIO', label: 'Socio' },
+    { value: 'USER', label: 'Usuario' },
   ]
 
   return (
@@ -83,8 +82,8 @@ export default function SuperAdminUsersPage() {
                         )}
                       </td>
                       <td className="py-3">
-                        <Badge variant={user.role === 'SUPER_ADMIN' ? 'danger' : user.role === 'CLUB_ADMIN' ? 'info' : 'default'}>
-                          {user.role}
+                        <Badge variant={user.platformRole === 'SUPER_ADMIN' ? 'danger' : 'default'}>
+                          {user.platformRole}
                         </Badge>
                       </td>
                       <td className="py-3">
@@ -101,14 +100,13 @@ export default function SuperAdminUsersPage() {
                       </td>
                       <td className="py-3 text-gray-500">{fmtDate(user.createdAt)}</td>
                       <td className="py-3 text-right">
-                        {user.role !== 'SUPER_ADMIN' && (
+                        {user.platformRole !== 'SUPER_ADMIN' && (
                           <select
-                            value={user.role}
+                            value={user.platformRole}
                             onChange={(e) => updateRole(user.id, e.target.value)}
                             className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white"
                           >
-                            <option value="SOCIO">Socio</option>
-                            <option value="CLUB_ADMIN">Admin</option>
+                            <option value="USER">Usuario</option>
                             <option value="SUPER_ADMIN">SuperAdmin</option>
                           </select>
                         )}

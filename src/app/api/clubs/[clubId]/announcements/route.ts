@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { ok, err, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
 import { sendPushNotification } from '@/lib/push'
 
@@ -12,7 +12,6 @@ const CreateAnnouncementSchema = z.object({
   pinned: z.boolean().default(false),
   priority: z.enum(['NORMAL', 'EMERGENCY']).default('NORMAL'),
   requiresConfirmation: z.boolean().default(false),
-  // null = all club members; a valid event id = only attendees of that event
   targetEventId: z.string().cuid().optional().nullable(),
   publishAt: z.string().datetime().optional(),
   expiresAt: z.string().datetime().nullable().optional(),
@@ -57,7 +56,7 @@ export async function GET(req: NextRequest, { params }: { params: { clubId: stri
 
 // POST /api/clubs/[clubId]/announcements
 export async function POST(req: NextRequest, { params }: { params: { clubId: string } }) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const body = await req.json().catch(() => null)
@@ -88,7 +87,7 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
     include: { sharedFiles: true },
   })
 
-  // ── Determine target audience ────────────────────────────────────────────
+  // Determine target audience
   let targetUserIds: string[] = []
 
   if (targetEventId) {
@@ -108,7 +107,6 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
   }
 
   if (targetUserIds.length > 0) {
-    // ── In-app notifications ───────────────────────────────────────────────
     const isEmergency = data.priority === 'EMERGENCY'
     const notifTitle = isEmergency
       ? `🚨 ${data.title}`
@@ -128,10 +126,6 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
       })),
     })
 
-    // ── Push notifications (FCM) ──────────────────────────────────────────
-    // Fired for EMERGENCY announcements or those that require confirmation.
-    // sendPushNotification is a fire-and-forget stub; replace with real FCM
-    // credentials via FIREBASE_SERVICE_ACCOUNT env var in production.
     if (isEmergency || data.requiresConfirmation) {
       await sendPushNotification({
         userIds: targetUserIds,

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/club-access'
+import { requireAuth } from '@/lib/authz'
 import { ok } from '@/lib/utils'
 
 /**
@@ -16,10 +16,23 @@ export async function GET(req: NextRequest) {
   const now = new Date()
 
   // Build user context for filtering
-  const user = await prisma.user.findUnique({
-    where: { id: auth.userId },
-    select: { province: true, locality: true },
-  })
+  const [user, clubMembership] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: auth.userId },
+      select: { province: true, locality: true },
+    }),
+    clubId
+      ? prisma.clubMembership.findFirst({
+          where: { userId: auth.userId, clubId, status: 'APPROVED' },
+          select: { clubRole: true },
+        })
+      : null,
+  ])
+
+  // Effective role for banner targeting
+  const effectiveRole = auth.platformRole === 'SUPER_ADMIN'
+    ? 'SUPER_ADMIN'
+    : clubMembership?.clubRole ?? 'MEMBER'
 
   let club = null
   if (clubId) {
@@ -40,8 +53,8 @@ export async function GET(req: NextRequest) {
   })
 
   const matched = allBanners.filter((b) => {
-    // Role filter
-    if (b.targetRoles.length > 0 && !b.targetRoles.includes(auth.role)) return false
+    // Role filter (targetRoles stores ClubRole values)
+    if (b.targetRoles.length > 0 && effectiveRole !== 'SUPER_ADMIN' && !b.targetRoles.includes(effectiveRole as never)) return false
 
     switch (b.targetType) {
       case 'ALL': return true

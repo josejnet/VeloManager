@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { ok, err, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
 
 const CreateEventSchema = z.object({
@@ -13,6 +13,7 @@ const CreateEventSchema = z.object({
   endAt: z.string().optional().nullable(),
   allDay: z.boolean().default(false),
   maxAttendees: z.number().int().positive().optional().nullable(),
+  price: z.number().positive().optional().nullable(),  // null = free event
   imageUrl: z.string().url().optional().nullable(),
   published: z.boolean().default(true),
 })
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest, { params }: { params: { clubId: stri
   const typeFilter = req.nextUrl.searchParams.get('type')
 
   // Admins see all events; regular socios only see published
-  const isAdmin = access.role === 'CLUB_ADMIN' || access.role === 'SUPER_ADMIN'
+  const isAdmin = access.clubRole === 'ADMIN' || access.platformRole === 'SUPER_ADMIN'
 
   const where: Record<string, unknown> = {
     clubId: params.clubId,
@@ -59,7 +60,7 @@ export async function GET(req: NextRequest, { params }: { params: { clubId: stri
 
 // POST /api/clubs/[clubId]/events
 export async function POST(req: NextRequest, { params }: { params: { clubId: string } }) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const body = await req.json().catch(() => null)
@@ -78,6 +79,7 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
       endAt: parsed.data.endAt ? new Date(parsed.data.endAt) : null,
       allDay: parsed.data.allDay,
       maxAttendees: parsed.data.maxAttendees ?? null,
+      price: parsed.data.price ?? null,
       imageUrl: parsed.data.imageUrl ?? null,
       published: parsed.data.published,
     },
