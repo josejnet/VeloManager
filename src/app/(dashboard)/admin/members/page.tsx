@@ -642,10 +642,34 @@ function ImportTab({ clubId }: { clubId: string }) {
   }
 
   const handleImport = async () => {
-    if (!rows.length) return
+    const valid = rows.filter((r) => r.nombre.trim() && r.email.trim())
+    if (!valid.length) return toast.error('No hay filas válidas para importar')
+    const missing = valid.filter((r) => !r.password.trim())
+    if (missing.length) return toast.error('Genera contraseñas para todos los socios antes de importar')
+
     setImporting(true)
-    toast('Funcionalidad próximamente', { icon: '🚧' })
+    const res = await fetch(`/api/clubs/${clubId}/members/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        members: valid.map((r) => ({
+          name: r.nombre.trim(),
+          email: r.email.trim().toLowerCase(),
+          password: r.password.trim(),
+        })),
+      }),
+    })
     setImporting(false)
+
+    if (res.ok) {
+      const d = await res.json()
+      toast.success(`${d.imported} socios importados${d.skipped ? `, ${d.skipped} ya existían` : ''}`)
+      if (d.errors?.length) toast.error(`${d.errors.length} errores: ${d.errors[0].reason}`)
+      setRows([])
+    } else {
+      const d = await res.json().catch(() => ({}))
+      toast.error(d.error ?? 'Error al importar')
+    }
   }
 
   const generatePasswords = () => {

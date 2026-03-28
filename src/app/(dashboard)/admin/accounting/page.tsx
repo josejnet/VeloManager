@@ -688,7 +688,7 @@ function ImportMovementsModal({ open, onClose, clubId, onSuccess }: {
             amount: parseFloat(row.importe),
             type: row.tipo.toUpperCase().trim(),
             date: row.fecha.trim(),
-            categoryId: null,
+            // omit categoryId — zod .optional() accepts undefined, not null
           }),
         })
         if (res.ok) {
