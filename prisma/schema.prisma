@@ -146,6 +146,23 @@ enum MemberProfileStatus {
   LINKED        // linked to a real User account
 }
 
+enum NotificationType {
+  EVENT_REMINDER    // upcoming event (24h / 2h before)
+  PAYMENT_DUE       // quota or order overdue
+  PAYMENT_RECEIVED  // payment confirmed
+  NEW_MEMBER        // new member joined club
+  TICKET_REPLY      // support ticket reply
+  SYSTEM            // generic platform announcement
+  PURCHASE_UPDATE   // order status changed
+}
+
+enum NotificationJobStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
 enum TicketStatus {
   OPEN          // newly created, awaiting first response
   IN_PROGRESS   // being handled
@@ -200,10 +217,12 @@ model User {
   targetedInvitations ClubInvitation[]      @relation("InvitationTarget")
   acceptedInvitations ClubInvitation[]      @relation("InvitationAcceptor")
   memberProfiles      ClubMemberProfile[]
-  createdTickets      Ticket[]           @relation("TicketCreator")
-  assignedTickets     Ticket[]           @relation("TicketAssignee")
-  escalatedTickets    Ticket[]           @relation("TicketEscalator")
-  ticketMessages      TicketMessage[]
+  createdTickets         Ticket[]                  @relation("TicketCreator")
+  assignedTickets        Ticket[]                  @relation("TicketAssignee")
+  escalatedTickets       Ticket[]                  @relation("TicketEscalator")
+  ticketMessages         TicketMessage[]
+  notificationPrefs      NotificationPreference[]
+  devices                UserDevice[]
 
   @@index([email])
   @@index([role])
@@ -805,20 +824,68 @@ model AuditLog {
 // ─── Notificaciones ────────────────────────────────────────────────────────
 
 model Notification {
-  id        String   @id @default(cuid())
+  id        String           @id @default(cuid())
   userId    String
-  clubId    String
+  clubId    String?          // null for platform-wide notifications
+  type      NotificationType @default(SYSTEM)
   title     String
   message   String
-  link      String?  // optional deep-link
-  read      Boolean  @default(false)
+  link      String?          // optional deep-link
+  read      Boolean          @default(false)
+  metadata  Json?            // extra data for rich rendering (eventId, amount, etc.)
+  createdAt DateTime         @default(now())
+
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club Club? @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, type])
+}
+
+// User preferences per notification type and channel
+model NotificationPreference {
+  id     String           @id @default(cuid())
+  userId String
+  type   NotificationType
+  inApp  Boolean          @default(true)
+  push   Boolean          @default(true)
+  email  Boolean          @default(false) // opt-in: weekly digest only
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+  @@index([userId])
+}
+
+// FCM device tokens for push notifications
+model UserDevice {
+  id        String   @id @default(cuid())
+  userId    String
+  fcmToken  String   @unique
+  platform  String   // "web" | "android" | "ios"
+  userAgent String?
+  lastSeen  DateTime @default(now())
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
 
-  @@index([userId, read])                    // unread count query
-  @@index([userId, clubId, createdAt(sort: Desc)])
+  @@index([userId])
+}
+
+// Background job queue — processed by /api/cron/process-queue (Vercel Cron)
+model NotificationJob {
+  id          String                @id @default(cuid())
+  jobType     String                // "event_reminder_24h" | "event_reminder_2h" | "payment_reminder" | "weekly_digest"
+  payload     Json
+  status      NotificationJobStatus @default(PENDING)
+  scheduledAt DateTime              // when the job should run (not before)
+  processedAt DateTime?
+  error       String?
+  createdAt   DateTime              @default(now())
+
+  @@index([status, scheduledAt])
+  @@index([jobType, status])
 }
 
 // ─── Catálogo global (maestros del sistema) ───────────────────────────────
