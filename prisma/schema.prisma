@@ -888,6 +888,15 @@ model NotificationJob {
   @@index([jobType, status])
 }
 
+// ─── Configuración global de la plataforma (singleton) ───────────────────────
+// Always one row with id = "singleton". Use upsert to create or update.
+
+model PlatformConfig {
+  id                        String   @id @default("singleton")
+  emailNotificationsEnabled Boolean  @default(false)
+  updatedAt                 DateTime @updatedAt
+}
+
 // ─── Catálogo global (maestros del sistema) ───────────────────────────────
 
 model Sport {

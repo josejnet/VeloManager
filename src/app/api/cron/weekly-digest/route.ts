@@ -11,6 +11,15 @@ export async function GET(req: NextRequest) {
     return new Response('Unauthorized', { status: 401 })
   }
 
+  // Check platform-level email toggle before doing anything
+  const platformConfig = await prisma.platformConfig.findUnique({
+    where: { id: 'singleton' },
+    select: { emailNotificationsEnabled: true },
+  })
+  if (!platformConfig?.emailNotificationsEnabled) {
+    return Response.json({ sent: 0, skipped: 0, reason: 'email_notifications_disabled' })
+  }
+
   const now = new Date()
   const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
 

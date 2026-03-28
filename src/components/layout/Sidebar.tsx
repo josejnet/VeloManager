@@ -52,6 +52,7 @@ const superAdminNav: NavItem[] = [
   { label: 'Banners', href: '/superadmin/banners', icon: Bell },
   { label: 'Módulos', href: '/superadmin/modules', icon: ShieldCheck },
   { label: 'Tickets', href: '/superadmin/tickets', icon: Ticket },
+  { label: 'Configuración', href: '/superadmin/settings', icon: Settings },
 ]
 
 interface SidebarProps {
