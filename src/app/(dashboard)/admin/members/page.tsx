@@ -624,9 +624,17 @@ function ImportTab({ clubId }: { clubId: string }) {
     const reader = new FileReader()
     reader.onload = (ev) => {
       const text = ev.target?.result as string
-      setRows(parseCsv(text))
+      // If UTF-8 produced replacement characters (U+FFFD) the file is likely
+      // Windows-1252 (common Excel/LibreOffice CSV export). Re-read with that encoding.
+      if (text.includes('\uFFFD')) {
+        const r2 = new FileReader()
+        r2.onload = (ev2) => setRows(parseCsv(ev2.target?.result as string))
+        r2.readAsText(file, 'windows-1252')
+      } else {
+        setRows(parseCsv(text))
+      }
     }
-    reader.readAsText(file)
+    reader.readAsText(file, 'utf-8')
   }
 
   const autoGeneratePasswords = () => {
