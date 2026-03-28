@@ -200,7 +200,7 @@ export default async function AdminDashboard() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">{ev.title}</p>
                     <p className="text-xs text-gray-400">
-                      {fmtDate(ev.date)}{ev.location ? ` · ${ev.location}` : ''}
+                      {fmtDate(ev.startAt)}{ev.location ? ` · ${ev.location}` : ''}
                     </p>
                   </div>
                 </div>
