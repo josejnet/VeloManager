@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { writeAudit, AUDIT } from '@/lib/audit'
 import { ok, err, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
 
@@ -27,7 +27,7 @@ export async function GET(
   const { page, pageSize, skip, take } = getPaginationParams(req.nextUrl.searchParams)
 
   // SOCIOs can only see their own orders
-  const isAdmin = access.role === 'CLUB_ADMIN' || access.role === 'SUPER_ADMIN'
+  const isAdmin = access.clubRole === 'ADMIN' || access.platformRole === 'SUPER_ADMIN'
   const where = {
     purchaseWindowId: params.windowId,
     clubId: params.clubId,

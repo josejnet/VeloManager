@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { writeAudit, AUDIT } from '@/lib/audit'
 import { ok, err } from '@/lib/utils'
 
@@ -17,7 +17,7 @@ const BulkGenerateSchema = z.object({
 // Bulk-creates a MemberQuota for every APPROVED member that doesn't already have one for the given year.
 // Idempotent: skips members who already have a quota for that year.
 export async function POST(req: NextRequest, { params }: { params: { clubId: string } }) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const body = await req.json().catch(() => null)

@@ -195,7 +195,7 @@ export async function notifySuperAdmins(
   input: Omit<CreateNotificationInput, 'userId' | 'clubId'>
 ): Promise<void> {
   const admins = await prisma.user.findMany({
-    where: { role: 'SUPER_ADMIN' },
+    where: { platformRole: 'SUPER_ADMIN' },
     select: { id: true },
   })
 

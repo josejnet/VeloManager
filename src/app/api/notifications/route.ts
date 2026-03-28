@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/club-access'
+import { requireAuth } from '@/lib/authz'
 import { ok, err, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
 
 // GET /api/notifications — list user's own notifications

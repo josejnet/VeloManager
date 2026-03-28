@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { sendEmail, clubMessageEmail } from '@/lib/email'
 import { ok, err, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
 import type { UserRole } from '@prisma/client'
@@ -17,7 +17,7 @@ const CreateMessageSchema = z.object({
 
 // GET /api/clubs/[clubId]/messages — list sent messages (admin)
 export async function GET(req: NextRequest, { params }: { params: { clubId: string } }) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const { page, pageSize, skip, take } = getPaginationParams(req.nextUrl.searchParams)
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest, { params }: { params: { clubId: stri
 
 // POST /api/clubs/[clubId]/messages — create and send message
 export async function POST(req: NextRequest, { params }: { params: { clubId: string } }) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const body = await req.json().catch(() => null)

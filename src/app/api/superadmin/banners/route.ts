@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireSuperAdmin } from '@/lib/club-access'
+import { requireSuperAdmin } from '@/lib/authz'
 import { ok, err, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
 
 const CreateBannerSchema = z.object({

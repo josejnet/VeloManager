@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { writeAudit, AUDIT } from '@/lib/audit'
 import { ok, err } from '@/lib/utils'
 import type { UserRole } from '@prisma/client'
@@ -39,7 +39,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { clubId: string; memberId: string } }
 ) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const body = await req.json().catch(() => null)
@@ -310,7 +310,10 @@ export async function PATCH(
 
       updated = await prisma.clubMembership.update({
         where: { id: params.memberId },
-        data: { role: parsed.data.role as UserRole },
+        data: {
+          role: parsed.data.role as UserRole,
+          clubRole: parsed.data.role === 'CLUB_ADMIN' ? 'ADMIN' : 'MEMBER',
+        },
       })
 
       await prisma.notification.create({
@@ -346,7 +349,7 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: { clubId: string; memberId: string } }
 ) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const membership = await prisma.clubMembership.findFirst({

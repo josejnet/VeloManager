@@ -1,13 +1,13 @@
 import { NextRequest } from 'next/server'
 import * as XLSX from 'xlsx'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 
 // GET /api/clubs/[clubId]/member-profiles/template
 export async function GET(
   _req: NextRequest,
   { params }: { params: { clubId: string } }
 ) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const headers = [

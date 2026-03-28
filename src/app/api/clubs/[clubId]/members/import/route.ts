@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { ok, err } from '@/lib/utils'
 
 const MemberRowSchema = z.object({
@@ -18,7 +18,7 @@ const ImportBodySchema = z.object({
 // POST /api/clubs/[clubId]/members/import
 // Bulk CSV import of members: upsert User by email, create ClubMembership if not exists
 export async function POST(req: NextRequest, { params }: { params: { clubId: string } }) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const club = await prisma.club.findUnique({

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { ok, err, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest, { params }: { params: { clubId: stri
   const status = req.nextUrl.searchParams.get('status') ?? undefined
   const windowId = req.nextUrl.searchParams.get('windowId') ?? undefined
 
-  const isAdmin = access.role === 'CLUB_ADMIN' || access.role === 'SUPER_ADMIN'
+  const isAdmin = access.clubRole === 'ADMIN' || access.platformRole === 'SUPER_ADMIN'
 
   const where = {
     clubId: params.clubId,

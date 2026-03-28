@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/club-access'
+import { requireAuth } from '@/lib/authz'
 import { writeAudit, AUDIT } from '@/lib/audit'
 import { ok, err } from '@/lib/utils'
 import type { UserRole } from '@prisma/client'
@@ -128,12 +128,14 @@ export async function POST(
       // 6. Upsert membership
       const membershipStatus = willApprove ? 'APPROVED' : 'PENDING'
 
+      const assignedClubRole = inv.assignedRole === 'CLUB_ADMIN' ? 'ADMIN' as const : 'MEMBER' as const
       const newMembership = existingMembership
         ? await tx.clubMembership.update({
             where: { id: existingMembership.id },
             data: {
               status: membershipStatus,
               role: inv.assignedRole as UserRole,
+              clubRole: assignedClubRole,
               invitationId: inv.id,
               joinedAt: membershipStatus === 'APPROVED' ? now : undefined,
             },
@@ -144,6 +146,7 @@ export async function POST(
               clubId: inv.clubId,
               status: membershipStatus,
               role: inv.assignedRole as UserRole,
+              clubRole: assignedClubRole,
               invitationId: inv.id,
               joinedAt: membershipStatus === 'APPROVED' ? now : undefined,
             },

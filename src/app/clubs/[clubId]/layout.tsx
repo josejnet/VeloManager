@@ -22,8 +22,8 @@ export default async function ClubLayout({ children, params }: ClubLayoutProps) 
   const userId = (session.user as { id: string }).id
 
   // Always query DB for platform role — never trust JWT
-  const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
-  const platformRole = dbUser?.role ?? 'SOCIO'
+  const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { platformRole: true } })
+  const platformRole = dbUser?.platformRole ?? 'USER'
 
   const headersList = await headers()
   const pathname = headersList.get('x-pathname') ?? headersList.get('x-invoke-path') ?? ''

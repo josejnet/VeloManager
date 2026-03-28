@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { writeAudit, AUDIT } from '@/lib/audit'
 import { ok, err } from '@/lib/utils'
 
@@ -19,7 +19,7 @@ const CreateTransactionSchema = z.object({
 // Kept for backward compatibility — delegates to BankMovement (MANUAL source).
 // Prefer /accounting/movements for new integrations.
 export async function POST(req: NextRequest, { params }: { params: { clubId: string } }) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const bankAccount = await prisma.bankAccount.findUnique({ where: { clubId: params.clubId } })

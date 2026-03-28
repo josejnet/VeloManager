@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { sendEmail } from '@/lib/email'
 import { writeAudit, AUDIT } from '@/lib/audit'
 import { ok, err } from '@/lib/utils'
@@ -12,7 +12,7 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: { clubId: string; invitationId: string } }
 ) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const invitation = await prisma.clubInvitation.findFirst({
@@ -50,7 +50,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { clubId: string; invitationId: string } }
 ) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const body = await req.json().catch(() => ({}))

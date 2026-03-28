@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess, requireAuth } from '@/lib/club-access'
+import { requireClubAccess, requireAuth } from '@/lib/authz'
 import { ok, err, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
 import type { MembershipStatus } from '@prisma/client'
 
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 
 // GET /api/clubs/[clubId]/members
 export async function GET(req: NextRequest, { params }: { params: { clubId: string } }) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const { page, pageSize, skip, take } = getPaginationParams(req.nextUrl.searchParams)
@@ -107,6 +107,7 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
           clubId: params.clubId,
           status: membershipStatus,
           role: 'SOCIO',
+          clubRole: 'MEMBER',
           joinedAt: willApprove ? new Date() : undefined,
         },
       })

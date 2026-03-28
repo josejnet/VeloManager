@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { writeAudit, AUDIT } from '@/lib/audit'
 import { ok, err } from '@/lib/utils'
 
@@ -21,7 +21,7 @@ const CreateMovementSchema = z.object({
 // Entries are append-only: existing movements can never be modified.
 // To correct an error, create a new ADJUSTMENT movement (e.g. reverse an expense with an income).
 export async function POST(req: NextRequest, { params }: { params: { clubId: string } }) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   // Bank account must exist (accounting enabled for this club)

@@ -31,7 +31,7 @@ export const authOptions: NextAuthOptions = {
         const passwordValid = await compare(credentials.password, user.password)
         if (!passwordValid) return null
 
-        return { id: user.id, email: user.email, name: user.name, role: user.role }
+        return { id: user.id, email: user.email, name: user.name, platformRole: user.platformRole }
       },
     }),
 
@@ -117,12 +117,12 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id
-        // Fetch role from DB
+        // Fetch platformRole from DB at login time (used only for middleware superadmin check)
         const dbUser = await prisma.user.findUnique({
           where: { id: user.id },
-          select: { role: true },
+          select: { platformRole: true },
         })
-        token.role = dbUser?.role ?? 'SOCIO'
+        token.role = dbUser?.platformRole ?? 'USER'
       }
       return token
     },

@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/club-access'
+import { requireAuth } from '@/lib/authz'
 import { ok, err, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
 
 const CreateClubSchema = z.object({
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 
   const { page, pageSize, skip, take } = getPaginationParams(req.nextUrl.searchParams)
 
-  if (auth.role === 'SUPER_ADMIN') {
+  if (auth.platformRole === 'SUPER_ADMIN') {
     // Super Admin sees all clubs
     const [clubs, total] = await Promise.all([
       prisma.club.findMany({

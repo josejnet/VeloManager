@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { writeAudit, AUDIT } from '@/lib/audit'
 import { ok, err, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
 
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest, { params }: { params: { clubId: stri
   const access = await requireClubAccess(params.clubId)
   if (!access.ok) return access.response
 
-  const isAdmin = access.role === 'CLUB_ADMIN' || access.role === 'SUPER_ADMIN'
+  const isAdmin = access.clubRole === 'ADMIN' || access.platformRole === 'SUPER_ADMIN'
   const { page, pageSize, skip, take } = getPaginationParams(req.nextUrl.searchParams)
   const status = req.nextUrl.searchParams.get('status')
   const year = req.nextUrl.searchParams.get('year')
@@ -68,7 +68,7 @@ export async function GET(req: NextRequest, { params }: { params: { clubId: stri
 
 // POST /api/clubs/[clubId]/accounting/quotas — assign a quota to a member
 export async function POST(req: NextRequest, { params }: { params: { clubId: string } }) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const body = await req.json().catch(() => null)
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
 
 // PATCH /api/clubs/[clubId]/accounting/quotas — mark quota as paid → creates BankMovement
 export async function PATCH(req: NextRequest, { params }: { params: { clubId: string } }) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const body = await req.json().catch(() => null)

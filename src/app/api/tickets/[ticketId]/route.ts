@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/club-access'
+import { requireAuth } from '@/lib/authz'
 import { writeAudit } from '@/lib/audit'
 import { ok, err } from '@/lib/utils'
 import type { TicketStatus, TicketPriority } from '@prisma/client'
@@ -40,7 +40,7 @@ const PatchTicketSchema = z.discriminatedUnion('action', [
   }),
 ])
 
-async function getTicketWithAccess(ticketId: string, userId: string, role: string) {
+async function getTicketWithAccess(ticketId: string, userId: string, platformRole: string) {
   const ticket = await prisma.ticket.findUnique({
     where: { id: ticketId },
     include: ticketDetailIncludes,
@@ -48,14 +48,16 @@ async function getTicketWithAccess(ticketId: string, userId: string, role: strin
 
   if (!ticket) return { ticket: null, forbidden: false }
 
-  if (role === 'SUPER_ADMIN') return { ticket, forbidden: false }
+  if (platformRole === 'SUPER_ADMIN') return { ticket, forbidden: false }
 
-  if (role === 'CLUB_ADMIN') {
-    // Club admin sees tickets of their clubs
-    const adminClubs = await prisma.clubMembership.findMany({
-      where: { userId, role: 'CLUB_ADMIN', status: 'APPROVED' },
-      select: { clubId: true },
-    })
+  // Check if user is admin in any club (club-scoped role)
+  const adminClubs = await prisma.clubMembership.findMany({
+    where: { userId, role: 'CLUB_ADMIN', status: 'APPROVED' },
+    select: { clubId: true },
+  })
+  const isClubAdmin = adminClubs.length > 0
+
+  if (isClubAdmin) {
     const clubIds = adminClubs.map((m) => m.clubId)
     if (ticket.clubId && clubIds.includes(ticket.clubId)) {
       return { ticket, forbidden: false }
@@ -65,7 +67,7 @@ async function getTicketWithAccess(ticketId: string, userId: string, role: strin
     return { ticket: null, forbidden: true }
   }
 
-  // SOCIO
+  // Regular member — can only see own tickets
   if (ticket.creatorId !== userId) return { ticket: null, forbidden: true }
   return { ticket, forbidden: false }
 }
@@ -78,7 +80,7 @@ export async function GET(
   const auth = await requireAuth()
   if (!auth.ok) return auth.response
 
-  const { ticket, forbidden } = await getTicketWithAccess(params.ticketId, auth.userId, auth.role)
+  const { ticket, forbidden } = await getTicketWithAccess(params.ticketId, auth.userId, auth.platformRole)
 
   if (forbidden) return err('Acceso denegado', 403)
   if (!ticket) return err('Ticket no encontrado', 404)
@@ -102,11 +104,7 @@ export async function PATCH(
 
   // Access control per action
   if (action === 'assign' || action === 'update_priority') {
-    if (auth.role !== 'SUPER_ADMIN') return err('Acceso denegado', 403)
-  } else if (action === 'update_status') {
-    if (auth.role !== 'SUPER_ADMIN' && auth.role !== 'CLUB_ADMIN') {
-      return err('Acceso denegado', 403)
-    }
+    if (auth.platformRole !== 'SUPER_ADMIN') return err('Acceso denegado', 403)
   }
 
   // Verify ticket access
@@ -116,7 +114,8 @@ export async function PATCH(
   })
   if (!existing) return err('Ticket no encontrado', 404)
 
-  if (auth.role === 'CLUB_ADMIN' && action === 'update_status') {
+  if (action === 'update_status' && auth.platformRole !== 'SUPER_ADMIN') {
+    // Club admin or creator can update status — verify club access
     const adminClubs = await prisma.clubMembership.findMany({
       where: { userId: auth.userId, role: 'CLUB_ADMIN', status: 'APPROVED' },
       select: { clubId: true },
@@ -136,9 +135,9 @@ export async function PATCH(
     // Verify assignee is a super admin
     const assignee = await prisma.user.findUnique({
       where: { id: parsed.data.assignedToId },
-      select: { role: true },
+      select: { platformRole: true },
     })
-    if (!assignee || assignee.role !== 'SUPER_ADMIN') {
+    if (!assignee || assignee.platformRole !== 'SUPER_ADMIN') {
       return err('Solo puedes asignar tickets a super administradores', 400)
     }
     updateData.assignedToId = parsed.data.assignedToId

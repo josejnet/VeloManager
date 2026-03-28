@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/club-access'
+import { requireAuth } from '@/lib/authz'
 import { writeAudit } from '@/lib/audit'
 import { ok, err, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
 import type { TicketCategory, TicketPriority, SubscriptionPlan, Prisma } from '@prisma/client'
@@ -52,19 +52,24 @@ export async function GET(req: NextRequest) {
 
   let where: Record<string, unknown> = {}
 
-  if (auth.role === 'SUPER_ADMIN') {
+  if (auth.platformRole === 'SUPER_ADMIN') {
     where = { ...statusFilter, ...categoryFilter }
-  } else if (auth.role === 'CLUB_ADMIN') {
-    const activeClubId = req.headers.get('x-active-club-id') ?? req.cookies.get('activeClubId')?.value
-    if (!activeClubId) return err('Club activo no encontrado', 400)
-    where = { clubId: activeClubId, ...statusFilter, ...categoryFilter }
   } else {
-    // SOCIO
-    where = { creatorId: auth.userId, ...statusFilter, ...categoryFilter }
+    const adminMemberships = await prisma.clubMembership.findMany({
+      where: { userId: auth.userId, role: 'CLUB_ADMIN', status: 'APPROVED' },
+      select: { clubId: true },
+    })
+    if (adminMemberships.length > 0) {
+      const activeClubId = req.headers.get('x-active-club-id') ?? req.cookies.get('activeClubId')?.value
+      if (!activeClubId) return err('Club activo no encontrado', 400)
+      where = { clubId: activeClubId, ...statusFilter, ...categoryFilter }
+    } else {
+      where = { creatorId: auth.userId, ...statusFilter, ...categoryFilter }
+    }
   }
 
   const orderBy =
-    auth.role === 'SUPER_ADMIN'
+    auth.platformRole === 'SUPER_ADMIN'
       ? [{ priority: 'desc' as const }, { createdAt: 'desc' as const }]
       : [{ createdAt: 'desc' as const }]
 
@@ -95,7 +100,7 @@ export async function POST(req: NextRequest) {
       select: { status: true },
     })
     if (
-      auth.role !== 'SUPER_ADMIN' &&
+      auth.platformRole !== 'SUPER_ADMIN' &&
       (!membership || membership.status !== 'APPROVED')
     ) {
       return err('No tienes acceso a este club', 403)
@@ -143,7 +148,7 @@ export async function POST(req: NextRequest) {
   })
 
   // Notifications
-  if (auth.role === 'SOCIO' && clubId) {
+  if (auth.platformRole !== 'SUPER_ADMIN' && clubId) {
     // Notify all CLUB_ADMINs of that club
     const admins = await prisma.clubMembership.findMany({
       where: { clubId, role: 'CLUB_ADMIN', status: 'APPROVED' },
@@ -162,16 +167,15 @@ export async function POST(req: NextRequest) {
         })
       )
     )
-  } else if (auth.role === 'CLUB_ADMIN' && !clubId) {
-    // Notify all SUPER_ADMINs — use a system club placeholder or skip clubId requirement
-    // Find a club this admin belongs to for the notification clubId
+  } else if (auth.platformRole !== 'SUPER_ADMIN' && !clubId) {
+    // Club admin escalating directly to super admin
     const membership = await prisma.clubMembership.findFirst({
       where: { userId: auth.userId, role: 'CLUB_ADMIN', status: 'APPROVED' },
       select: { clubId: true },
     })
     if (membership) {
       const superAdmins = await prisma.user.findMany({
-        where: { role: 'SUPER_ADMIN' },
+        where: { platformRole: 'SUPER_ADMIN' },
         select: { id: true },
       })
       await Promise.all(

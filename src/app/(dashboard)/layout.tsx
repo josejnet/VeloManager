@@ -14,23 +14,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const userId = (session.user as { id: string }).id
 
-  // Always query DB for role — JWT can be stale after role changes
-  const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
-  const role = (dbUser?.role ?? 'SOCIO') as 'SUPER_ADMIN' | 'CLUB_ADMIN' | 'SOCIO'
+  // Always query DB for platformRole — never trust stale JWT
+  const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { platformRole: true } })
+  const platformRole = dbUser?.platformRole ?? 'USER'
+  const isSuperAdmin = platformRole === 'SUPER_ADMIN'
 
   const headersList = await headers()
   const pathname = headersList.get('x-pathname') ?? headersList.get('x-invoke-path') ?? ''
-
-  // Prevent SOCIO from accessing admin routes (defense-in-depth on top of middleware)
-  if (role === 'SOCIO' && pathname.startsWith('/admin')) {
-    redirect('/socio')
-  }
 
   let club = null
   let membershipRole: 'CLUB_ADMIN' | 'SOCIO' | null = null
   let membershipId = ''
 
-  if (role !== 'SUPER_ADMIN') {
+  if (!isSuperAdmin) {
     const cookieStore = await cookies()
     const activeClubId = cookieStore.get('activeClubId')?.value ?? null
 
@@ -62,19 +58,22 @@ export default async function DashboardLayout({ children }: { children: React.Re
           : pathname.slice('/admin'.length)
         redirect(`/clubs/${membership.clubId}/${section}${subpath}`)
       }
+    } else if (pathname.startsWith('/admin')) {
+      // Non-member trying to access admin — redirect to socio landing
+      redirect('/socio')
     }
   }
 
   const isInSocioView = pathname.startsWith('/socio')
   const isAdminViewingAsSocio = membershipRole === 'CLUB_ADMIN' && isInSocioView
 
-  const sidebarRole = role === 'SUPER_ADMIN'
+  const sidebarRole = isSuperAdmin
     ? 'SUPER_ADMIN'
     : isAdminViewingAsSocio
       ? 'SOCIO'
       : (membershipRole ?? 'SOCIO')
 
-  const mode: DashboardContextValue['mode'] = role === 'SUPER_ADMIN'
+  const mode: DashboardContextValue['mode'] = isSuperAdmin
     ? 'superadmin'
     : isInSocioView
       ? 'socio'
@@ -86,7 +85,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     clubLogo: club?.logoUrl ?? null,
     colorTheme: club?.colorTheme ?? null,
     membershipId,
-    role: role === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : (membershipRole ?? 'SOCIO'),
+    role: isSuperAdmin ? 'SUPER_ADMIN' : (membershipRole ?? 'SOCIO'),
     mode,
     isAdminViewingAsSocio,
   }

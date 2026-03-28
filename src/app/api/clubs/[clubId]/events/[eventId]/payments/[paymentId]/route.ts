@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { ok, err } from '@/lib/utils'
 import { writeAudit } from '@/lib/audit'
 
@@ -12,7 +12,7 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: { clubId: string; eventId: string; paymentId: string } }
 ) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const payment = await prisma.eventPayment.findFirst({

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/club-access'
+import { requireAuth } from '@/lib/authz'
 import { writeAudit } from '@/lib/audit'
 import { ok, err } from '@/lib/utils'
 
@@ -12,8 +12,9 @@ export async function POST(
   const auth = await requireAuth()
   if (!auth.ok) return auth.response
 
-  if (auth.role !== 'CLUB_ADMIN') {
-    return err('Solo los administradores de club pueden escalar tickets', 403)
+  // SUPER_ADMIN cannot escalate (they are the escalation target)
+  if (auth.platformRole === 'SUPER_ADMIN') {
+    return err('Los super administradores no pueden escalar tickets', 403)
   }
 
   const ticket = await prisma.ticket.findUnique({
@@ -63,7 +64,7 @@ export async function POST(
 
   // Notify all SUPER_ADMINs
   const superAdmins = await prisma.user.findMany({
-    where: { role: 'SUPER_ADMIN' },
+    where: { platformRole: 'SUPER_ADMIN' },
     select: { id: true },
   })
 

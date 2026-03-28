@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/club-access'
+import { requireAuth } from '@/lib/authz'
 import { ok, err } from '@/lib/utils'
 
 const CreateMessageSchema = z.object({
@@ -24,12 +24,7 @@ export async function POST(
 
   const { body: msgBody, isInternal, attachments } = parsed.data
 
-  // isInternal only for admins
-  if (isInternal && auth.role === 'SOCIO') {
-    return err('No tienes permiso para crear notas internas', 403)
-  }
-
-  // Fetch ticket
+  // Fetch ticket and check access
   const ticket = await prisma.ticket.findUnique({
     where: { id: params.ticketId },
     select: {
@@ -43,20 +38,28 @@ export async function POST(
   })
   if (!ticket) return err('Ticket no encontrado', 404)
 
-  // Access check
-  const isAdmin = auth.role === 'SUPER_ADMIN' || auth.role === 'CLUB_ADMIN'
+  // Determine effective admin status (SUPER_ADMIN or CLUB_ADMIN in ticket's club)
+  let isAdmin = auth.platformRole === 'SUPER_ADMIN'
   if (!isAdmin) {
-    if (ticket.creatorId !== auth.userId) return err('Acceso denegado', 403)
-  } else if (auth.role === 'CLUB_ADMIN') {
     const adminClubs = await prisma.clubMembership.findMany({
       where: { userId: auth.userId, role: 'CLUB_ADMIN', status: 'APPROVED' },
       select: { clubId: true },
     })
     const clubIds = adminClubs.map((m) => m.clubId)
-    const owns =
-      (ticket.clubId && clubIds.includes(ticket.clubId)) ||
-      ticket.creatorId === auth.userId
-    if (!owns) return err('Acceso denegado', 403)
+    isAdmin = (!!ticket.clubId && clubIds.includes(ticket.clubId)) || ticket.creatorId === auth.userId
+    if (isAdmin && ticket.clubId && !clubIds.includes(ticket.clubId) && ticket.creatorId !== auth.userId) {
+      isAdmin = false
+    }
+  }
+
+  // isInternal only for admins
+  if (isInternal && !isAdmin) {
+    return err('No tienes permiso para crear notas internas', 403)
+  }
+
+  // Access check — non-admin can only reply to their own tickets
+  if (!isAdmin && ticket.creatorId !== auth.userId) {
+    return err('Acceso denegado', 403)
   }
 
   // Determine new ticket status

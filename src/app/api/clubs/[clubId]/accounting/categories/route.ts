@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { writeAudit, AUDIT } from '@/lib/audit'
 import { ok, err } from '@/lib/utils'
 
@@ -16,7 +16,7 @@ const CreateCategorySchema = z.object({
 // GET /api/clubs/[clubId]/accounting/categories
 // Returns income and expense categories grouped by type
 export async function GET(_req: NextRequest, { params }: { params: { clubId: string } }) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const categories = await prisma.ledgerCategory.findMany({
@@ -32,7 +32,7 @@ export async function GET(_req: NextRequest, { params }: { params: { clubId: str
 
 // POST /api/clubs/[clubId]/accounting/categories
 export async function POST(req: NextRequest, { params }: { params: { clubId: string } }) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const body = await req.json().catch(() => null)
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
 
 // DELETE /api/clubs/[clubId]/accounting/categories?id=xxx
 export async function DELETE(req: NextRequest, { params }: { params: { clubId: string } }) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   const id = req.nextUrl.searchParams.get('id')

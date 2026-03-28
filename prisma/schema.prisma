@@ -204,8 +204,7 @@ model User {
   email         String       @unique
   name          String
   password      String?      // nullable to support OAuth-only accounts
-  role          UserRole     @default(SOCIO)
-  platformRole  PlatformRole @default(USER)  // Phase 2: replaces role for platform-level checks
+  platformRole  PlatformRole @default(USER)
   avatarUrl     String?
   // Location for segmented announcements
   province      String?
@@ -238,7 +237,7 @@ model User {
   devices                UserDevice[]
 
   @@index([email])
-  @@index([role])
+  @@index([platformRole])
   @@index([province])
   @@index([locality])
 }

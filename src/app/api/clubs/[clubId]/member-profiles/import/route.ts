@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import * as XLSX from 'xlsx'
 import { prisma } from '@/lib/prisma'
-import { requireClubAccess } from '@/lib/club-access'
+import { requireClubAccess } from '@/lib/authz'
 import { ok, err } from '@/lib/utils'
 import { writeAudit } from '@/lib/audit'
 
@@ -75,7 +75,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { clubId: string } }
 ) {
-  const access = await requireClubAccess(params.clubId, 'CLUB_ADMIN')
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
   let formData: FormData
