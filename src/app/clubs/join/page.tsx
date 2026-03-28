@@ -1,13 +1,14 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { signOut } from 'next-auth/react'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Modal } from '@/components/ui/Modal'
 import { Select } from '@/components/ui/Input'
 import { THEMES } from '@/lib/themes'
-import { Trophy, Plus, Search, Users } from 'lucide-react'
+import { Trophy, Plus, Search, Users, LogOut } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function JoinClubPage() {
@@ -55,6 +56,16 @@ export default function JoinClubPage() {
             <Trophy className="h-5 w-5 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Clube</h1>
+        </div>
+
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={() => signOut({ callbackUrl: '/login' })}
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-600 transition-colors"
+          >
+            <LogOut className="h-4 w-4" />
+            Cerrar sesión
+          </button>
         </div>
 
         <Card>
