@@ -146,6 +146,28 @@ enum MemberProfileStatus {
   LINKED        // linked to a real User account
 }
 
+enum TicketStatus {
+  OPEN          // newly created, awaiting first response
+  IN_PROGRESS   // being handled
+  WAITING       // waiting for user / club reply
+  RESOLVED      // marked solved, pending confirmation
+  CLOSED        // permanently closed
+}
+
+enum TicketPriority {
+  LOW           // FREE plan clubs or general inquiries
+  MEDIUM        // PRO plan clubs
+  HIGH          // PREMIUM plan clubs
+  URGENT        // ENTERPRISE plan clubs or critical issues
+}
+
+enum TicketCategory {
+  BILLING       // Stripe, cuotas, cobros duplicados
+  TECHNICAL     // App no carga, inscripciones fallidas
+  REPORT        // Denuncia de comportamiento
+  INQUIRY       // Consulta general
+}
+
 // ─── Core: Users & Auth ───────────────────────────────────────────────────────
 
 model User {
@@ -178,6 +200,10 @@ model User {
   targetedInvitations ClubInvitation[]      @relation("InvitationTarget")
   acceptedInvitations ClubInvitation[]      @relation("InvitationAcceptor")
   memberProfiles      ClubMemberProfile[]
+  createdTickets      Ticket[]           @relation("TicketCreator")
+  assignedTickets     Ticket[]           @relation("TicketAssignee")
+  escalatedTickets    Ticket[]           @relation("TicketEscalator")
+  ticketMessages      TicketMessage[]
 
   @@index([email])
   @@index([role])
@@ -266,6 +292,7 @@ model Club {
   customRoles       ClubCustomRole[]
   invitations       ClubInvitation[]
   memberProfiles    ClubMemberProfile[]
+  tickets           Ticket[]
 
   @@index([active])
   @@index([sport])
@@ -1028,4 +1055,60 @@ model ClubMemberProfile {
   @@index([clubId])
   @@index([userId])
   @@index([clubId, status])
+}
+
+// ─── Soporte y Ticketing ──────────────────────────────────────────────────────
+
+model Ticket {
+  id            String         @id @default(cuid())
+  code          String         @unique  // e.g. TK-0042 for quick reference
+
+  subject       String
+  description   String         @db.Text
+  status        TicketStatus   @default(OPEN)
+  priority      TicketPriority @default(LOW)
+  category      TicketCategory
+
+  // Scope: who created it and in which club context
+  creatorId     String
+  clubId        String?        // null = platform-level ticket (Club_ADMIN → SuperAdmin)
+
+  // Assignment & escalation
+  assignedToId  String?        // SuperAdmin userId handling this ticket
+  escalatedAt   DateTime?
+  escalatedById String?
+
+  // Device / app metadata snapshot at creation time
+  metadata      Json?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  creator    User          @relation("TicketCreator",   fields: [creatorId],    references: [id])
+  club       Club?         @relation(fields: [clubId],  references: [id], onDelete: SetNull)
+  assignedTo User?         @relation("TicketAssignee",  fields: [assignedToId], references: [id])
+  escalatedBy User?        @relation("TicketEscalator", fields: [escalatedById],references: [id])
+  messages   TicketMessage[]
+
+  @@index([creatorId])
+  @@index([clubId, status])
+  @@index([status, priority])
+  @@index([assignedToId])
+}
+
+model TicketMessage {
+  id          String   @id @default(cuid())
+  ticketId    String
+  senderId    String
+  body        String   @db.Text
+  attachments String[] // URLs to uploaded files (S3 / Cloudinary)
+  isInternal  Boolean  @default(false) // internal notes — only visible to admins
+
+  createdAt DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender User   @relation(fields: [senderId], references: [id])
+
+  @@index([ticketId])
+  @@index([senderId])
 }
