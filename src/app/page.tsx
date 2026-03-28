@@ -17,7 +17,7 @@ export default async function LandingPage() {
       where: { userId, status: 'APPROVED' },
       select: { role: true },
     })
-    if (membership) redirect('/socio')
+    if (membership) redirect(membership.role === 'CLUB_ADMIN' ? '/admin' : '/socio')
 
     // Authenticated but no club yet
     redirect('/clubs/join')

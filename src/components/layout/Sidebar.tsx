@@ -53,19 +53,33 @@ interface SidebarProps {
   clubName?: string
   clubLogo?: string | null
   colorTheme?: string
-  /** If true, we're showing the SOCIO view but user is actually a CLUB_ADMIN */
   isAdminViewingAsSocio?: boolean
+  mode?: 'admin' | 'socio' | 'superadmin'
 }
 
-export function Sidebar({ role, clubName, clubLogo, colorTheme, isAdminViewingAsSocio }: SidebarProps) {
+export function Sidebar({ role, clubName, clubLogo, colorTheme, isAdminViewingAsSocio, mode = 'socio' }: SidebarProps) {
   const pathname = usePathname()
   const nav = role === 'SUPER_ADMIN' ? superAdminNav : role === 'CLUB_ADMIN' ? adminNav : socioNav
 
   // If a CLUB_ADMIN is currently in the socio view, show socio nav + admin panel link
   const effectiveNav = isAdminViewingAsSocio ? socioNav : nav
 
+  // Visual mode indicator: top border color signals admin vs socio context
+  const modeBorderClass = mode === 'admin'
+    ? 'border-t-4 border-t-orange-400'
+    : mode === 'socio'
+      ? 'border-t-4 border-t-blue-400'
+      : 'border-t-4 border-t-red-400'
+
+  const modeLabel = mode === 'admin' ? 'GESTIÓN' : mode === 'socio' ? 'SOCIO' : 'SUPER ADMIN'
+  const modeLabelClass = mode === 'admin'
+    ? 'text-orange-600 bg-orange-50'
+    : mode === 'socio'
+      ? 'text-blue-600 bg-blue-50'
+      : 'text-red-600 bg-red-50'
+
   return (
-    <aside className="w-64 min-h-screen bg-white border-r border-gray-100 flex flex-col">
+    <aside className={cn('w-64 min-h-screen bg-white border-r border-gray-100 flex flex-col', modeBorderClass)}>
       {/* Club brand */}
       <div className="px-4 py-5 border-b border-gray-100">
         <div className="flex items-center gap-3">
@@ -76,26 +90,26 @@ export function Sidebar({ role, clubName, clubLogo, colorTheme, isAdminViewingAs
               <Trophy className="h-5 w-5 text-white" />
             )}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-gray-900 truncate">
               {clubName ?? 'Clube'}
             </p>
-            <p className="text-xs text-gray-400">
-              {role === 'SUPER_ADMIN' ? 'Super Admin' : role === 'CLUB_ADMIN' && !isAdminViewingAsSocio ? 'Administrador' : 'Socio'}
-            </p>
+            <span className={cn('inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mt-0.5 tracking-wide', modeLabelClass)}>
+              {modeLabel}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Admin panel banner (shown when CLUB_ADMIN is in socio view) */}
+      {/* Admin panel shortcut (shown when CLUB_ADMIN is in socio view) */}
       {isAdminViewingAsSocio && (
         <div className="mx-3 mt-3">
           <Link
             href="/admin"
-            className="flex items-center gap-2 px-3 py-2 bg-primary/10 text-primary rounded-lg text-xs font-semibold hover:bg-primary/20 transition-colors"
+            className="flex items-center gap-2 px-3 py-2 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg text-xs font-semibold hover:bg-orange-100 transition-colors"
           >
             <ShieldCheck className="h-4 w-4 flex-shrink-0" />
-            Panel de administración
+            Panel de gestión
           </Link>
         </div>
       )}

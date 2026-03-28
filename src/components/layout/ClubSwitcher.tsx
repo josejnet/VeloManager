@@ -61,9 +61,8 @@ export function ClubSwitcher({ userId: _userId, currentClubId, onSwitch }: ClubS
   }, [])
 
   const handleSwitch = (clubId: string) => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('activeClubId', clubId)
-    }
+    // Use cookie instead of localStorage so the server layout can read it
+    document.cookie = `activeClubId=${clubId}; path=/; max-age=31536000; SameSite=Lax`
     setOpen(false)
     onSwitch(clubId)
   }

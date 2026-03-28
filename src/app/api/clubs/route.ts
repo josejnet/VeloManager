@@ -36,25 +36,35 @@ export async function GET(req: NextRequest) {
     return ok(buildPaginatedResponse(clubs, total, page, pageSize))
   }
 
-  // Regular user — only their approved clubs
-  const [memberships, total] = await Promise.all([
-    prisma.clubMembership.findMany({
-      where: { userId: auth.userId, status: 'APPROVED' },
-      skip,
-      take,
+  // Read preferred club from cookie to return it first (used by client pages)
+  const cookieHeader = req.headers.get('cookie') ?? ''
+  const activeClubIdMatch = cookieHeader.match(/(?:^|;\s*)activeClubId=([^;]+)/)
+  const activeClubId = activeClubIdMatch?.[1] ?? null
+
+  const where = { userId: auth.userId, status: 'APPROVED' } as const
+  const includeClub = {
+    club: {
       include: {
-        club: {
-          include: {
-            bankAccount: true,
-            _count: { select: { memberships: { where: { status: 'APPROVED' } } } },
-          },
-        },
+        bankAccount: true,
+        _count: { select: { memberships: { where: { status: 'APPROVED' } } } },
       },
-    }),
-    prisma.clubMembership.count({ where: { userId: auth.userId, status: 'APPROVED' } }),
+    },
+  }
+
+  const [memberships, total] = await Promise.all([
+    prisma.clubMembership.findMany({ where, skip, take, include: includeClub }),
+    prisma.clubMembership.count({ where }),
   ])
 
-  const clubs = memberships.map((m) => ({ ...m.club, myRole: m.role }))
+  // Sort: active club first, then the rest by joinedAt
+  const sorted = activeClubId
+    ? [
+        ...memberships.filter((m) => m.club.id === activeClubId),
+        ...memberships.filter((m) => m.club.id !== activeClubId),
+      ]
+    : memberships
+
+  const clubs = sorted.map((m) => ({ ...m.club, myRole: m.role }))
   return ok(buildPaginatedResponse(clubs, total, page, pageSize))
 }
 

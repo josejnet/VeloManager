@@ -138,6 +138,14 @@ export async function PATCH(
     case 'suspend': {
       if (membership.status !== 'APPROVED') return err('Solo se pueden suspender miembros activos')
 
+      // Last-admin guard: cannot suspend the only admin
+      if (membership.role === 'CLUB_ADMIN') {
+        const adminCount = await prisma.clubMembership.count({
+          where: { clubId: params.clubId, role: 'CLUB_ADMIN', status: 'APPROVED' },
+        })
+        if (adminCount <= 1) return err('No puedes suspender al único administrador del club', 409)
+      }
+
       updated = await prisma.clubMembership.update({
         where: { id: params.memberId },
         data: { status: 'SUSPENDED' },
@@ -196,6 +204,14 @@ export async function PATCH(
 
     case 'ban': {
       if (membership.status === 'BANNED') return err('El miembro ya está baneado')
+
+      // Last-admin guard: cannot ban the only admin
+      if (membership.role === 'CLUB_ADMIN') {
+        const adminCount = await prisma.clubMembership.count({
+          where: { clubId: params.clubId, role: 'CLUB_ADMIN', status: 'APPROVED' },
+        })
+        if (adminCount <= 1) return err('No puedes banear al único administrador del club', 409)
+      }
 
       updated = await prisma.clubMembership.update({
         where: { id: params.memberId },
@@ -264,6 +280,14 @@ export async function PATCH(
     case 'change_role': {
       if (membership.status !== 'APPROVED') return err('Solo se puede cambiar el rol de miembros activos')
 
+      // Last-admin guard: cannot demote the only admin
+      if (membership.role === 'CLUB_ADMIN' && parsed.data.role === 'SOCIO') {
+        const adminCount = await prisma.clubMembership.count({
+          where: { clubId: params.clubId, role: 'CLUB_ADMIN', status: 'APPROVED' },
+        })
+        if (adminCount <= 1) return err('No puedes degradar al único administrador del club', 409)
+      }
+
       updated = await prisma.clubMembership.update({
         where: { id: params.memberId },
         data: { role: parsed.data.role as UserRole },
@@ -311,6 +335,14 @@ export async function DELETE(
   })
   if (!membership) return err('Miembro no encontrado', 404)
   if (membership.status === 'BANNED') return err('No puedes eliminar un miembro baneado. Usa "desbanear" primero si es necesario.')
+
+  // Last-admin guard: cannot remove the only admin
+  if (membership.role === 'CLUB_ADMIN') {
+    const adminCount = await prisma.clubMembership.count({
+      where: { clubId: params.clubId, role: 'CLUB_ADMIN', status: 'APPROVED' },
+    })
+    if (adminCount <= 1) return err('No puedes eliminar al único administrador del club', 409)
+  }
 
   // Soft delete: mark as LEFT instead of hard delete to preserve history
   await prisma.clubMembership.update({
