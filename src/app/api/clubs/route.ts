@@ -46,10 +46,10 @@ export async function GET(req: NextRequest) {
     club: {
       include: {
         bankAccount: true,
-        _count: { select: { memberships: { where: { status: 'APPROVED' } } } },
+        _count: { select: { memberships: { where: { status: 'APPROVED' as const } } } },
       },
     },
-  }
+  } as const
 
   const [memberships, total] = await Promise.all([
     prisma.clubMembership.findMany({ where, skip, take, include: includeClub }),
