@@ -98,7 +98,10 @@ export default function SettingsPage() {
             <Input label="Nombre del club" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <Input label="Slogan / Lema" value={form.slogan} onChange={(e) => setForm({ ...form, slogan: e.target.value })} />
             <Input label="Deporte" value={form.sport} onChange={(e) => setForm({ ...form, sport: e.target.value })} />
-            <Input label="URL del logo" value={form.logoUrl} onChange={(e) => setForm({ ...form, logoUrl: e.target.value })} />
+            <div>
+              <Input label="URL del logo" value={form.logoUrl} onChange={(e) => setForm({ ...form, logoUrl: e.target.value })} placeholder="https://..." />
+              <p className="text-xs text-gray-400 mt-1">PNG o JPG · mínimo 200×200 px · máximo 1 MB · fondo transparente recomendado</p>
+            </div>
           </div>
           <div className="flex justify-end pt-4">
             <Button onClick={save} loading={loading}>Guardar cambios</Button>

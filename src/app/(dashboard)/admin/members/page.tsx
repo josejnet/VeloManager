@@ -9,11 +9,11 @@ import { Modal } from '@/components/ui/Modal'
 import { Input, Select } from '@/components/ui/Input'
 import { Pagination } from '@/components/ui/Pagination'
 import { fmtDate, fmtCurrency } from '@/lib/utils'
-import { Check, X, Plus, User, Mail, Link2, Copy, Send, Trash2, Ban, ShieldCheck } from 'lucide-react'
+import { Check, X, Plus, User, Mail, Link2, Copy, Send, Trash2, Ban, ShieldCheck, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { MemberWithUser, PaginatedResponse } from '@/types'
 
-type TabType = 'APPROVED' | 'PENDING' | 'SUSPENDED' | 'BANNED' | 'invitations'
+type TabType = 'APPROVED' | 'PENDING' | 'SUSPENDED' | 'BANNED' | 'invitations' | 'import'
 
 type Invitation = {
   id: string
@@ -218,6 +218,7 @@ export default function MembersPage() {
     { key: 'SUSPENDED', label: 'Suspendidos' },
     { key: 'BANNED', label: 'Baneados' },
     { key: 'invitations', label: 'Invitaciones' },
+    { key: 'import', label: 'Importar' },
   ]
 
   return (
@@ -246,7 +247,7 @@ export default function MembersPage() {
           </CardHeader>
 
           {/* ── Members table (APPROVED / PENDING / SUSPENDED / BANNED) ── */}
-          {tab !== 'invitations' && (
+          {tab !== 'invitations' && tab !== 'import' && (
             loading ? (
               <p className="text-sm text-gray-400 py-8 text-center">Cargando...</p>
             ) : !data?.data.length ? (
@@ -344,6 +345,11 @@ export default function MembersPage() {
                 <Pagination page={data.page} totalPages={data.totalPages} total={data.total} pageSize={data.pageSize} onPageChange={setPage} />
               </div>
             )
+          )}
+
+          {/* ── Import tab ── */}
+          {tab === 'import' && (
+            <ImportTab clubId={clubId} />
           )}
 
           {/* ── Invitations tab ── */}
@@ -568,6 +574,194 @@ export default function MembersPage() {
           </div>
         </div>
       </Modal>
+    </div>
+  )
+}
+
+// ── Import Tab ────────────────────────────────────────────────────────────────
+
+type CsvRow = { nombre: string; email: string; password: string }
+
+function generatePassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
+  let pwd = ''
+  for (let i = 0; i < 8; i++) pwd += chars[Math.floor(Math.random() * chars.length)]
+  return pwd
+}
+
+function parseCsv(text: string): CsvRow[] {
+  const lines = text.trim().split('\n')
+  if (lines.length < 2) return []
+  // Skip header row
+  return lines.slice(1).map((line) => {
+    const parts = line.split(',').map((p) => p.trim().replace(/^"|"$/g, ''))
+    return { nombre: parts[0] ?? '', email: parts[1] ?? '', password: parts[2] ?? '' }
+  }).filter((r) => r.nombre || r.email)
+}
+
+function ImportTab({ clubId }: { clubId: string }) {
+  const [rows, setRows] = useState<CsvRow[]>([])
+  const [importing, setImporting] = useState(false)
+
+  // Password generator
+  const [pwCount, setPwCount] = useState(10)
+  const [generatedPws, setGeneratedPws] = useState<string[]>([])
+
+  const downloadTemplate = () => {
+    const csv = 'nombre,email,password\nEjemplo Socio,socio@ejemplo.com,Password123'
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'plantilla_socios.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string
+      setRows(parseCsv(text))
+    }
+    reader.readAsText(file)
+  }
+
+  const autoGeneratePasswords = () => {
+    setRows((prev) => prev.map((r) => ({ ...r, password: generatePassword() })))
+  }
+
+  const handleImport = async () => {
+    if (!rows.length) return
+    setImporting(true)
+    toast('Funcionalidad próximamente', { icon: '🚧' })
+    setImporting(false)
+  }
+
+  const generatePasswords = () => {
+    const pwds: string[] = []
+    for (let i = 0; i < pwCount; i++) pwds.push(generatePassword())
+    setGeneratedPws(pwds)
+  }
+
+  const copyAllPasswords = () => {
+    navigator.clipboard.writeText(generatedPws.join('\n'))
+    toast.success('Contraseñas copiadas')
+  }
+
+  return (
+    <div className="space-y-6 pt-2">
+      {/* CSV Import section */}
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-800 mb-1">Importar socios desde CSV</h3>
+          <p className="text-xs text-gray-500">Descarga la plantilla CSV, rellénala y súbela para importar múltiples socios a la vez.</p>
+        </div>
+
+        <Button size="sm" variant="outline" onClick={downloadTemplate}>
+          <FileText className="h-3.5 w-3.5" /> Descargar plantilla CSV
+        </Button>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1.5">Subir archivo CSV</label>
+          <input
+            type="file"
+            accept=".csv"
+            onChange={handleFileUpload}
+            className="block text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-primary file:text-white hover:file:bg-primary/90 cursor-pointer"
+          />
+        </div>
+
+        {rows.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-gray-600">{rows.length} socios listos para importar</p>
+              <Button size="sm" variant="outline" onClick={autoGeneratePasswords}>
+                Generar contraseñas automáticamente
+              </Button>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-gray-100">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs text-gray-500 border-b border-gray-100 bg-gray-50">
+                    <th className="text-left py-2 px-3 font-medium">Nombre</th>
+                    <th className="text-left py-2 px-3 font-medium">Email</th>
+                    <th className="text-left py-2 px-3 font-medium">Contraseña</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {rows.map((row, i) => (
+                    <tr key={i} className="hover:bg-gray-50">
+                      <td className="py-2 px-3 text-gray-900">{row.nombre || <span className="text-gray-300 italic">—</span>}</td>
+                      <td className="py-2 px-3 text-gray-600">{row.email || <span className="text-gray-300 italic">—</span>}</td>
+                      <td className="py-2 px-3 font-mono text-gray-500 text-xs">
+                        {row.password ? '••••••••' : <span className="text-gray-300 italic">sin contraseña</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <Button disabled={importing} onClick={handleImport}>
+              {importing ? 'Importando...' : `Importar ${rows.length} socios`}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Divider */}
+      <div className="border-t border-gray-100" />
+
+      {/* Password generator section */}
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-800 mb-1">Generador de contraseñas</h3>
+          <p className="text-xs text-gray-500">Genera contraseñas aleatorias de 8 caracteres alfanuméricos para asignar a los socios.</p>
+        </div>
+
+        <div className="flex items-end gap-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">Cantidad</label>
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={pwCount}
+              onChange={(e) => setPwCount(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
+              className="w-24 px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+          <Button size="sm" onClick={generatePasswords}>Generar contraseñas</Button>
+        </div>
+
+        {generatedPws.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-gray-600">{generatedPws.length} contraseñas generadas</p>
+              <Button size="sm" variant="outline" onClick={copyAllPasswords}>
+                <Copy className="h-3.5 w-3.5" /> Copiar todas
+              </Button>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {generatedPws.map((pw, i) => (
+                <div key={i} className="flex items-center justify-between gap-1 px-3 py-2 bg-gray-50 rounded-xl border border-gray-100">
+                  <span className="font-mono text-xs text-gray-700 flex-1">{pw}</span>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(pw); toast.success('Copiado') }}
+                    className="text-gray-300 hover:text-primary transition-colors"
+                  >
+                    <Copy className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

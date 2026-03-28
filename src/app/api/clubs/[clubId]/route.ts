@@ -10,7 +10,7 @@ const UpdateClubSchema = z.object({
   slogan: z.string().max(200).optional(),
   sport: z.string().optional(),
   colorTheme: z.string().optional(),
-  logoUrl: z.string().url().optional().nullable(),
+  logoUrl: z.union([z.string().url(), z.literal('')]).optional().nullable().transform(v => v === '' ? null : v),
   primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().nullable(),
   secondaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().nullable(),
   // Access control

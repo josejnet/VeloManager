@@ -39,6 +39,7 @@ const superAdminNav = [
 export function Sidebar({ role, clubName, clubLogo, baseHref = '', mode = 'socio' }: SidebarProps) {
   const pathname = usePathname()
   const [gestionOpen, setGestionOpen] = useState(true)
+  const [socioOpen, setSocioOpen] = useState(true)
 
   const isAdmin = role === 'ADMIN' || role === 'SUPER_ADMIN'
 
@@ -56,7 +57,6 @@ export function Sidebar({ role, clubName, clubLogo, baseHref = '', mode = 'socio
   const gestionNav = [
     { label: 'Dashboard',         href: `${baseHref}/admin`,                   icon: LayoutDashboard, action: null },
     { label: 'Socios',            href: `${baseHref}/admin/members`,           icon: Users,           action: 'members:manage' },
-    { label: 'Directorio',        href: `${baseHref}/admin/members/directory`, icon: ClipboardList,   action: 'members:view_directory' },
     { label: 'Deudas',            href: `${baseHref}/admin/members/debt`,      icon: AlertCircle,     action: 'members:view_debt' },
     { label: 'Contabilidad',      href: `${baseHref}/admin/accounting`,        icon: Wallet,          action: 'accounting:read' },
     { label: 'Informes',          href: `${baseHref}/admin/accounting/reports`,icon: BarChart2,       action: 'accounting:read' },
@@ -65,7 +65,6 @@ export function Sidebar({ role, clubName, clubLogo, baseHref = '', mode = 'socio
     { label: 'Eventos',           href: `${baseHref}/admin/events`,            icon: Calendar,        action: 'events:create' },
     { label: 'Mensajería',        href: `${baseHref}/admin/messages`,          icon: Globe,           action: 'messages:broadcast' },
     { label: 'Anuncios',          href: `${baseHref}/admin/announcements`,     icon: Bell,            action: 'announcements:create' },
-    { label: 'Auditoría',         href: `${baseHref}/admin/audit`,             icon: ClipboardList,   action: 'audit:read' },
     { label: 'Soporte',           href: `${baseHref}/admin/support`,           icon: LifeBuoy,        action: 'members:manage' },
     { label: 'Configuración',     href: `${baseHref}/admin/settings`,          icon: Settings,        action: 'settings:write' },
   ] as const
@@ -138,15 +137,28 @@ export function Sidebar({ role, clubName, clubLogo, baseHref = '', mode = 'socio
       </div>
 
       <nav className="flex-1 px-3 py-4 overflow-y-auto">
-        {/* Sección socio — siempre visible */}
-        <div className="space-y-0.5">
-          {socioNav.map(item => (
-            <Link key={item.href} href={item.href}
-              className={cn('sidebar-item', isActive(item.href) && 'active')}>
-              <item.icon className="h-4 w-4 flex-shrink-0" />
-              {item.label}
-            </Link>
-          ))}
+        {/* Sección socio — colapsable solo para ADMIN */}
+        <div>
+          {isAdmin && (
+            <button
+              onClick={() => setSocioOpen(o => !o)}
+              className="flex items-center justify-between w-full px-2 py-1.5 mb-1 text-xs font-bold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors"
+            >
+              <span>Mi club</span>
+              <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', !socioOpen && '-rotate-90')} />
+            </button>
+          )}
+          {(!isAdmin || socioOpen) && (
+            <div className="space-y-0.5">
+              {socioNav.map(item => (
+                <Link key={item.href} href={item.href}
+                  className={cn('sidebar-item', isActive(item.href) && 'active')}>
+                  <item.icon className="h-4 w-4 flex-shrink-0" />
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Sección gestión — solo si tiene permisos */}
