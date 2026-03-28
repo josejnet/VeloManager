@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Wallet, ShoppingBag, Vote,
   Settings, ClipboardList, LogOut, Trophy, Globe,
   Calendar, Mail, Bell, BarChart2, AlertCircle, User,
-  ShieldCheck, LifeBuoy, Ticket,
+  ShieldCheck, LifeBuoy, Ticket, BellRing,
 } from 'lucide-react'
 
 interface NavItem {
@@ -29,6 +29,7 @@ const adminNav: NavItem[] = [
   { label: 'Mensajería', href: '/admin/messages', icon: Globe },
   { label: 'Anuncios', href: '/admin/announcements', icon: Bell },
   { label: 'Auditoría', href: '/admin/audit', icon: ClipboardList },
+  { label: 'Notificaciones', href: '/notifications', icon: BellRing },
   { label: 'Soporte', href: '/admin/support', icon: LifeBuoy },
   { label: 'Configuración', href: '/admin/settings', icon: Settings },
 ]
@@ -40,6 +41,7 @@ const socioNav: NavItem[] = [
   { label: 'Eventos', href: '/socio/events', icon: Calendar },
   { label: 'Mensajes', href: '/socio/inbox', icon: Mail },
   { label: 'Mi Perfil', href: '/socio/profile', icon: User },
+  { label: 'Notificaciones', href: '/notifications', icon: BellRing },
   { label: 'Soporte', href: '/socio/support', icon: LifeBuoy },
 ]
 

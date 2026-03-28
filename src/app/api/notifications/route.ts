@@ -1,21 +1,29 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/club-access'
-import { ok, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
+import { ok, err, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
 
-// GET /api/notifications
+// GET /api/notifications — list user's own notifications
 export async function GET(req: NextRequest) {
   const auth = await requireAuth()
   if (!auth.ok) return auth.response
 
   const { page, pageSize, skip, take } = getPaginationParams(req.nextUrl.searchParams)
   const unreadOnly = req.nextUrl.searchParams.get('unread') === 'true'
-  const clubId = req.nextUrl.searchParams.get('clubId')
 
-  const where = {
+  // Read activeClubId from cookie header
+  const cookieHeader = req.headers.get('cookie') ?? ''
+  const activeClubIdMatch = cookieHeader.match(/activeClubId=([^;]+)/)
+  const activeClubId = activeClubIdMatch ? decodeURIComponent(activeClubIdMatch[1]) : null
+
+  const where: {
+    userId: string
+    read?: boolean
+    clubId?: string | null
+  } = {
     userId: auth.userId,
     ...(unreadOnly ? { read: false } : {}),
-    ...(clubId ? { clubId } : {}),
+    ...(activeClubId ? { clubId: activeClubId } : {}),
   }
 
   const [notifications, total, unreadCount] = await Promise.all([
@@ -29,20 +37,8 @@ export async function GET(req: NextRequest) {
     prisma.notification.count({ where: { userId: auth.userId, read: false } }),
   ])
 
-  return ok({ ...buildPaginatedResponse(notifications, total, page, pageSize), unreadCount })
-}
-
-// PATCH /api/notifications — mark all as read
-export async function PATCH(req: NextRequest) {
-  const auth = await requireAuth()
-  if (!auth.ok) return auth.response
-
-  const body = await req.json().catch(() => ({}))
-  const where = body.id
-    ? { id: body.id as string, userId: auth.userId }
-    : { userId: auth.userId, read: false }
-
-  await prisma.notification.updateMany({ where, data: { read: true } })
-
-  return ok({ success: true })
+  return ok({
+    ...buildPaginatedResponse(notifications, total, page, pageSize),
+    unreadCount,
+  })
 }
