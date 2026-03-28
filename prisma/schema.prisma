@@ -20,6 +20,18 @@ enum UserRole {
   SOCIO
 }
 
+// Phase 2 role separation — platform-level identity
+enum PlatformRole {
+  SUPER_ADMIN  // platform operator
+  USER         // regular platform user
+}
+
+// Phase 2 role separation — club-scoped permission
+enum ClubRole {
+  ADMIN   // club administrator (was CLUB_ADMIN)
+  MEMBER  // regular club member (was SOCIO)
+}
+
 enum MembershipStatus {
   PENDING
   APPROVED
@@ -188,11 +200,12 @@ enum TicketCategory {
 // ─── Core: Users & Auth ───────────────────────────────────────────────────────
 
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
+  id            String       @id @default(cuid())
+  email         String       @unique
   name          String
-  password      String?  // nullable to support OAuth-only accounts
-  role          UserRole @default(SOCIO)
+  password      String?      // nullable to support OAuth-only accounts
+  role          UserRole     @default(SOCIO)
+  platformRole  PlatformRole @default(USER)  // Phase 2: replaces role for platform-level checks
   avatarUrl     String?
   // Location for segmented announcements
   province      String?
@@ -327,6 +340,7 @@ model ClubMembership {
   clubId    String
   status    MembershipStatus @default(PENDING)
   role      UserRole         @default(SOCIO)
+  clubRole  ClubRole         @default(MEMBER)  // Phase 2: replaces role for club-scoped checks
   joinedAt  DateTime?
   // Ban tracking
   bannedAt      DateTime?
