@@ -22,8 +22,11 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
   const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
-  const bankAccount = await prisma.bankAccount.findUnique({ where: { clubId: params.clubId } })
-  if (!bankAccount) return err('Cuenta bancaria no encontrada', 404)
+  await prisma.bankAccount.upsert({
+    where: { clubId: params.clubId },
+    create: { clubId: params.clubId },
+    update: {},
+  })
 
   const body = await req.json().catch(() => null)
   const parsed = CreateTransactionSchema.safeParse(body)

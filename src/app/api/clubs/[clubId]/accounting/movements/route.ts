@@ -24,9 +24,12 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
   const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
-  // Bank account must exist (accounting enabled for this club)
-  const bankAccount = await prisma.bankAccount.findUnique({ where: { clubId: params.clubId } })
-  if (!bankAccount) return err('Cuenta bancaria no configurada para este club', 422)
+  // Auto-create bank account on first movement if not yet configured (all fields optional)
+  await prisma.bankAccount.upsert({
+    where: { clubId: params.clubId },
+    create: { clubId: params.clubId },
+    update: {},
+  })
 
   const body = await req.json().catch(() => null)
   const parsed = CreateMovementSchema.safeParse(body)

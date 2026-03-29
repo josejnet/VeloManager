@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
 import { SessionProvider } from '@/components/providers/SessionProvider'
+import { SWRConfigProvider } from '@/components/providers/SWRConfigProvider'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'], display: 'swap', preload: false })
@@ -16,7 +17,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es">
       <body className={inter.className}>
         <SessionProvider>
-          {children}
+          <SWRConfigProvider>
+            {children}
+          </SWRConfigProvider>
           <Toaster
             position="top-right"
             toastOptions={{

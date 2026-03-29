@@ -12,13 +12,20 @@ import { fmtDateTime } from '@/lib/utils'
 import { Send, Plus, Users, Mail } from 'lucide-react'
 import toast from 'react-hot-toast'
 
+type RecipientMode = 'ALL' | 'MULTIPLE' | 'ONE'
+
+interface Member { id: string; name: string; email: string }
+
 export default function MessagesAdminPage() {
   const { data: session } = useSession()
   const [clubId, setClubId] = useState('')
   const [data, setData] = useState<any>(null)
   const [page, setPage] = useState(1)
   const [modal, setModal] = useState(false)
-  const [form, setForm] = useState({ subject: '', body: '', targetRole: 'MEMBER', sendEmail: true })
+  const [members, setMembers] = useState<Member[]>([])
+  const [recipientMode, setRecipientMode] = useState<RecipientMode>('ALL')
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [form, setForm] = useState({ subject: '', body: '' })
 
   useEffect(() => {
     if (!session?.user) return
@@ -33,16 +40,53 @@ export default function MessagesAdminPage() {
 
   useEffect(() => { fetch_() }, [fetch_])
 
+  // Load members when modal opens
+  useEffect(() => {
+    if (!modal || !clubId || members.length > 0) return
+    fetch(`/api/clubs/${clubId}/members?pageSize=500`)
+      .then((r) => r.json())
+      .then((d) => {
+        const list: Member[] = (d.data ?? []).map((m: any) => ({
+          id: m.userId ?? m.user?.id ?? m.id,
+          name: m.user?.name ?? m.name ?? '',
+          email: m.user?.email ?? m.email ?? '',
+        }))
+        setMembers(list)
+      })
+  }, [modal, clubId, members.length])
+
+  const toggleId = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    )
+  }
+
+  const openModal = () => {
+    setForm({ subject: '', body: '' })
+    setRecipientMode('ALL')
+    setSelectedIds([])
+    setModal(true)
+  }
+
   const send = async () => {
     if (!form.subject || !form.body) return toast.error('Asunto y mensaje son obligatorios')
+
+    let payload: Record<string, unknown> = { subject: form.subject, body: form.body, sendEmail: false }
+
+    if (recipientMode === 'ALL') {
+      payload.targetRole = 'ALL'
+    } else if (recipientMode === 'MULTIPLE' || recipientMode === 'ONE') {
+      if (selectedIds.length === 0) return toast.error('Selecciona al menos un destinatario')
+      payload.recipientIds = selectedIds
+    }
+
     const res = await fetch(`/api/clubs/${clubId}/messages`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     })
     if (res.ok) {
       const d = await res.json()
       toast.success(`Mensaje enviado a ${d._count?.recipients ?? 0} destinatarios`)
       setModal(false)
-      setForm({ subject: '', body: '', targetRole: 'MEMBER', sendEmail: true })
       fetch_()
     } else {
       const d = await res.json(); toast.error(d.error ?? 'Error')
@@ -56,7 +100,7 @@ export default function MessagesAdminPage() {
         <Card>
           <CardHeader>
             <CardTitle>Mensajes enviados</CardTitle>
-            <Button size="sm" onClick={() => setModal(true)}><Plus className="h-4 w-4" />Nuevo mensaje</Button>
+            <Button size="sm" onClick={openModal}><Plus className="h-4 w-4" />Nuevo mensaje</Button>
           </CardHeader>
 
           {!data ? <p className="text-sm text-gray-400 py-8 text-center">Cargando...</p> : (
@@ -90,13 +134,57 @@ export default function MessagesAdminPage() {
 
       <Modal open={modal} onClose={() => setModal(false)} title="Nuevo mensaje" size="lg">
         <div className="space-y-4">
-          <Select label="Destinatarios" value={form.targetRole}
-            onChange={(e) => setForm({ ...form, targetRole: e.target.value })}
+          {/* Recipient mode */}
+          <Select
+            label="Destinatarios"
+            value={recipientMode}
+            onChange={(e) => { setRecipientMode(e.target.value as RecipientMode); setSelectedIds([]) }}
             options={[
-              { value: 'MEMBER', label: 'Todos los socios' },
-              { value: 'ADMIN', label: 'Solo administradores' },
-              { value: 'ALL', label: 'Todos los miembros del club' },
-            ]} />
+              { value: 'ALL', label: 'Todos los socios' },
+              { value: 'MULTIPLE', label: 'Varios socios' },
+              { value: 'ONE', label: 'Un socio específico' },
+            ]}
+          />
+
+          {/* Single member picker */}
+          {recipientMode === 'ONE' && (
+            <Select
+              label="Selecciona el socio"
+              value={selectedIds[0] ?? ''}
+              onChange={(e) => setSelectedIds(e.target.value ? [e.target.value] : [])}
+              options={[
+                { value: '', label: '— Elige un socio —' },
+                ...members.map((m) => ({ value: m.id, label: `${m.name} (${m.email})` })),
+              ]}
+            />
+          )}
+
+          {/* Multi member picker */}
+          {recipientMode === 'MULTIPLE' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Selecciona socios <span className="text-gray-400 font-normal">({selectedIds.length} seleccionados)</span>
+              </label>
+              <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                {members.length === 0 && (
+                  <p className="text-sm text-gray-400 p-3 text-center">Cargando socios...</p>
+                )}
+                {members.map((m) => (
+                  <label key={m.id} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(m.id)}
+                      onChange={() => toggleId(m.id)}
+                      className="accent-primary"
+                    />
+                    <span className="text-sm text-gray-900">{m.name}</span>
+                    <span className="text-xs text-gray-400 ml-auto">{m.email}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
           <Input label="Asunto" placeholder="Asunto del mensaje" value={form.subject}
             onChange={(e) => setForm({ ...form, subject: e.target.value })} />
           <div>
@@ -109,13 +197,6 @@ export default function MessagesAdminPage() {
               onChange={(e) => setForm({ ...form, body: e.target.value })}
             />
           </div>
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="checkbox" checked={form.sendEmail}
-              onChange={(e) => setForm({ ...form, sendEmail: e.target.checked })}
-              className="rounded" />
-            <span className="font-medium text-gray-700">Enviar también por email</span>
-            <span className="text-gray-400">(requiere proveedor de email configurado)</span>
-          </label>
           <div className="flex gap-2 pt-2">
             <Button className="flex-1" onClick={send}><Send className="h-4 w-4" />Enviar mensaje</Button>
             <Button variant="outline" className="flex-1" onClick={() => setModal(false)}>Cancelar</Button>

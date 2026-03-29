@@ -12,7 +12,7 @@ import { fmtCurrency, fmtDate } from '@/lib/utils'
 import {
   TrendingUp, TrendingDown, Plus, FileText, Check,
   Tag, Zap, Receipt, Package, User, Wrench, RotateCcw,
-  Wallet, AlertCircle,
+  Wallet, AlertCircle, Upload,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -61,6 +61,7 @@ function BankLedger({ clubId }: { clubId: string }) {
   const [sourceFilter, setSourceFilter] = useState('')
   const [modal, setModal] = useState(false)
   const [catModal, setCatModal] = useState(false)
+  const [importModal, setImportModal] = useState(false)
   const [categories, setCategories] = useState<{ income: any[]; expense: any[] }>({ income: [], expense: [] })
   const [form, setForm] = useState({ type: 'INCOME', amount: '', description: '', date: new Date().toISOString().slice(0, 10), categoryId: '' })
   const [catForm, setCatForm] = useState({ name: '', type: 'INCOME', color: '#10b981' })
@@ -158,6 +159,7 @@ function BankLedger({ clubId }: { clubId: string }) {
               {Object.entries(SOURCE_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
             <Button size="sm" variant="outline" onClick={() => setCatModal(true)}><Tag className="h-4 w-4" />Categorías</Button>
+            <Button size="sm" variant="outline" onClick={() => setImportModal(true)}><FileText className="h-4 w-4" />Importar movimientos</Button>
             <Button size="sm" onClick={() => setModal(true)}><Plus className="h-4 w-4" />Nuevo</Button>
           </div>
         </CardHeader>
@@ -241,6 +243,9 @@ function BankLedger({ clubId }: { clubId: string }) {
           </div>
         </div>
       </Modal>
+
+      {/* Import movements modal */}
+      <ImportMovementsModal open={importModal} onClose={() => setImportModal(false)} clubId={clubId} onSuccess={() => { setImportModal(false); loadLedger() }} />
 
       {/* Categories management modal */}
       <Modal open={catModal} onClose={() => setCatModal(false)} title="Categorías de movimientos" size="sm">
@@ -610,5 +615,239 @@ function QuotasPanel({ clubId }: { clubId: string }) {
         </div>
       </Modal>
     </Card>
+  )
+}
+
+// ── Import Movements Modal ────────────────────────────────────────────────────
+
+type MovementCsvRow = {
+  fecha: string
+  descripcion: string
+  importe: string
+  tipo: string
+  categoria: string
+}
+
+function parseMovementsCsv(text: string): MovementCsvRow[] {
+  const lines = text.trim().split('\n')
+  if (lines.length < 2) return []
+  return lines.slice(1).map((line) => {
+    const parts = line.split(',').map((p) => p.trim().replace(/^"|"$/g, ''))
+    return {
+      fecha: parts[0] ?? '',
+      descripcion: parts[1] ?? '',
+      importe: parts[2] ?? '',
+      tipo: parts[3] ?? '',
+      categoria: parts[4] ?? '',
+    }
+  }).filter((r) => r.descripcion || r.importe)
+}
+
+function ImportMovementsModal({ open, onClose, clubId, onSuccess }: {
+  open: boolean
+  onClose: () => void
+  clubId: string
+  onSuccess: () => void
+}) {
+  const [rows, setRows] = useState<MovementCsvRow[]>([])
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+  const [importing, setImporting] = useState(false)
+
+  const downloadTemplate = () => {
+    const csv = [
+      'fecha,descripcion,importe,tipo,categoria',
+      `${new Date().toISOString().slice(0, 10)},Ejemplo ingreso,150.00,INCOME,`,
+      `${new Date().toISOString().slice(0, 10)},Ejemplo gasto,75.50,EXPENSE,Material`,
+    ].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'plantilla_movimientos.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string
+      // Fallback to windows-1252 if UTF-8 produced replacement chars (Excel exports)
+      if (text.includes('\uFFFD')) {
+        const r2 = new FileReader()
+        r2.onload = (ev2) => { setRows(parseMovementsCsv(ev2.target?.result as string)); setProgress(null) }
+        r2.readAsText(file, 'windows-1252')
+      } else {
+        setRows(parseMovementsCsv(text))
+        setProgress(null)
+      }
+    }
+    reader.readAsText(file, 'utf-8')
+  }
+
+  const handleImport = async () => {
+    if (!rows.length) return
+    setImporting(true)
+    setProgress({ done: 0, total: rows.length })
+    let succeeded = 0
+    let failed = 0
+    let firstError = ''
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]
+      try {
+        const res = await fetch(`/api/clubs/${clubId}/accounting/movements`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            description: row.descripcion,
+            amount: parseFloat(row.importe),
+            type: row.tipo.toUpperCase().trim(),
+            date: row.fecha.trim(),
+            // omit categoryId — zod .optional() accepts undefined, not null
+          }),
+        })
+        if (res.ok) {
+          succeeded++
+        } else {
+          failed++
+          if (!firstError) {
+            const d = await res.json().catch(() => ({}))
+            firstError = d.error ?? `Error HTTP ${res.status}`
+          }
+        }
+      } catch {
+        failed++
+      }
+      setProgress({ done: i + 1, total: rows.length })
+    }
+
+    setImporting(false)
+    if (succeeded > 0) {
+      toast.success(`${succeeded} movimientos importados correctamente`)
+    }
+    if (failed > 0) {
+      toast.error(`${failed} fallidos${firstError ? `: ${firstError}` : ''}`, { duration: 6000 })
+    }
+    if (succeeded > 0) onSuccess()
+  }
+
+  const handleClose = () => {
+    if (importing) return
+    setRows([])
+    setProgress(null)
+    onClose()
+  }
+
+  return (
+    <Modal open={open} onClose={handleClose} title="Importar movimientos desde CSV" size="md">
+      <div className="space-y-4">
+        <div className="p-3 bg-blue-50 rounded-xl flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+          <div className="text-xs text-blue-700 space-y-0.5">
+            <p>Descarga la plantilla, rellénala y súbela para importar movimientos en bloque.</p>
+            <p>Campos: <strong>fecha</strong> (YYYY-MM-DD), <strong>descripcion</strong>, <strong>importe</strong>, <strong>tipo</strong> (INCOME o EXPENSE), <strong>categoria</strong> (opcional).</p>
+          </div>
+        </div>
+
+        <button
+          onClick={downloadTemplate}
+          className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-600"
+        >
+          <FileText className="h-3.5 w-3.5" /> Descargar plantilla CSV
+        </button>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1.5">Subir archivo CSV</label>
+          <input
+            type="file"
+            accept=".csv"
+            disabled={importing}
+            onChange={handleFileUpload}
+            className="block text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-primary file:text-white hover:file:bg-primary/90 cursor-pointer disabled:opacity-50"
+          />
+        </div>
+
+        {rows.length > 0 && (
+          <div className="space-y-3">
+            <p className="text-xs font-medium text-gray-600">{rows.length} movimientos listos para importar</p>
+
+            <div className="overflow-x-auto rounded-xl border border-gray-100 max-h-48 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-gray-50">
+                  <tr className="text-gray-500 border-b border-gray-100">
+                    <th className="text-left py-2 px-3 font-medium">Fecha</th>
+                    <th className="text-left py-2 px-3 font-medium">Descripción</th>
+                    <th className="text-left py-2 px-3 font-medium">Importe</th>
+                    <th className="text-left py-2 px-3 font-medium">Tipo</th>
+                    <th className="text-left py-2 px-3 font-medium">Categoría</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {rows.map((row, i) => (
+                    <tr key={i} className="hover:bg-gray-50">
+                      <td className="py-1.5 px-3 text-gray-500">{row.fecha}</td>
+                      <td className="py-1.5 px-3 text-gray-900">{row.descripcion}</td>
+                      <td className={`py-1.5 px-3 font-medium ${row.tipo.toUpperCase() === 'INCOME' ? 'text-green-600' : 'text-red-500'}`}>
+                        {row.tipo.toUpperCase() === 'INCOME' ? '+' : '-'}{row.importe}
+                      </td>
+                      <td className="py-1.5 px-3">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${row.tipo.toUpperCase() === 'INCOME' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                          {row.tipo.toUpperCase() === 'INCOME' ? 'Ingreso' : 'Gasto'}
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-3 text-gray-400">{row.categoria || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {progress && (
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>Importando...</span>
+                  <span>{progress.done} / {progress.total}</span>
+                </div>
+                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary rounded-full transition-all"
+                    style={{ width: `${(progress.done / progress.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                disabled={importing}
+                onClick={handleImport}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Upload className="h-4 w-4" />
+                {importing ? `Importando ${progress?.done ?? 0}/${progress?.total ?? rows.length}...` : `Importar ${rows.length} movimientos`}
+              </button>
+              <button
+                disabled={importing}
+                onClick={handleClose}
+                className="px-4 py-2 text-sm font-medium border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {rows.length === 0 && (
+          <div className="flex gap-2 justify-end pt-1">
+            <button onClick={handleClose} className="px-4 py-2 text-sm font-medium border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+              Cerrar
+            </button>
+          </div>
+        )}
+      </div>
+    </Modal>
   )
 }

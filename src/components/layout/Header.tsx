@@ -1,7 +1,7 @@
 'use client'
 import { useRouter, usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { ShieldCheck, User, ArrowLeftRight } from 'lucide-react'
+import { ShieldCheck, User } from 'lucide-react'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { ClubSwitcher } from '@/components/layout/ClubSwitcher'
 import { useDashboard } from '@/providers/DashboardProvider'
@@ -91,19 +91,6 @@ export function Header({ title }: HeaderProps) {
           {cfg.label}
         </span>
 
-        {/* Mode toggle — ADMIN only */}
-        {canToggle && (
-          <button
-            onClick={handleToggle}
-            title={mode === 'admin' ? 'Cambiar a vista de socio' : 'Cambiar a panel de gestión'}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 border border-gray-200 transition-colors"
-          >
-            <ArrowLeftRight className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">
-              {mode === 'admin' ? 'Vista socio' : 'Panel gestor'}
-            </span>
-          </button>
-        )}
 
         {/* Club switcher */}
         {clubId && mode !== 'superadmin' && (

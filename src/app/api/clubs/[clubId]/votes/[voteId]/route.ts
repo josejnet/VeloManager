@@ -21,6 +21,17 @@ export async function POST(
   })
   if (!vote) return err('Votación no encontrada o cerrada', 404)
 
+  // Check temporal window
+  const now = new Date()
+  if (vote.startsAt && vote.startsAt > now) {
+    return err('Esta votación aún no ha comenzado', 400)
+  }
+  if (vote.endsAt && vote.endsAt <= now) {
+    // Auto-close in DB to keep state consistent
+    await prisma.vote.update({ where: { id: vote.id }, data: { active: false, closedAt: now } })
+    return err('Esta votación ha expirado', 400)
+  }
+
   const body = await req.json().catch(() => null)
   const parsed = RespondSchema.safeParse(body)
   if (!parsed.success) return err(parsed.error.errors[0].message)
