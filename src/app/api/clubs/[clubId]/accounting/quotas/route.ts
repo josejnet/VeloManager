@@ -326,3 +326,66 @@ export async function PATCH(req: NextRequest, { params }: { params: { clubId: st
     }
   }
 }
+
+// DELETE /api/clubs/[clubId]/accounting/quotas?quotaId=xxx
+// Reverts a PAID quota back to PENDING and creates a reversal ADJUSTMENT entry in accounting.
+export async function DELETE(req: NextRequest, { params }: { params: { clubId: string } }) {
+  const access = await requireClubAccess(params.clubId, 'ADMIN')
+  if (!access.ok) return access.response
+
+  const quotaId = req.nextUrl.searchParams.get('quotaId')
+  if (!quotaId) return err('quotaId requerido', 400)
+
+  const quota = await prisma.memberQuota.findFirst({
+    where: { id: quotaId, clubId: params.clubId },
+    include: {
+      membership: { include: { user: { select: { id: true, name: true } } } },
+    },
+  })
+  if (!quota) return err('Cuota no encontrada', 404)
+  if (quota.status !== 'PAID') return err('Solo se pueden revertir cuotas que estén pagadas', 409)
+
+  // Find the linked FEE BankMovement (created when quota was marked paid)
+  const originalMovement = await prisma.bankMovement.findUnique({
+    where: { source_sourceId: { source: 'FEE', sourceId: quota.id } },
+  })
+
+  await prisma.$transaction(async (tx) => {
+    // Revert quota to PENDING
+    await tx.memberQuota.update({
+      where: { id: quota.id },
+      data: { status: 'PENDING', paidAt: null },
+    })
+
+    // Create ADJUSTMENT (reversal) movement to balance the original income
+    if (originalMovement) {
+      await tx.bankMovement.create({
+        data: {
+          clubId: params.clubId,
+          type: 'EXPENSE',
+          amount: originalMovement.amount,
+          description: `Anulación cuota ${quota.year} — ${quota.membership.user.name}`,
+          source: 'ADJUSTMENT',
+          sourceId: originalMovement.id,
+          date: new Date(),
+        },
+      })
+    }
+  })
+
+  await writeAudit({
+    clubId: params.clubId,
+    userId: access.userId,
+    action: AUDIT.QUOTA_REVERTED,
+    entity: 'MemberQuota',
+    entityId: quota.id,
+    details: {
+      member: quota.membership.user.name,
+      year: quota.year,
+      amount: Number(quota.amount),
+      adjustmentCreated: !!originalMovement,
+    },
+  })
+
+  return ok({ reverted: true })
+}

@@ -818,9 +818,17 @@ function ImportTab({ clubId }: { clubId: string }) {
     const reader = new FileReader()
     reader.onload = (ev) => {
       const text = ev.target?.result as string
-      setRows(parseCsv(text))
+      // If UTF-8 produced replacement characters (U+FFFD) the file is likely
+      // Windows-1252 (common Excel/LibreOffice CSV export). Re-read with that encoding.
+      if (text.includes('\uFFFD')) {
+        const r2 = new FileReader()
+        r2.onload = (ev2) => setRows(parseCsv(ev2.target?.result as string))
+        r2.readAsText(file, 'windows-1252')
+      } else {
+        setRows(parseCsv(text))
+      }
     }
-    reader.readAsText(file)
+    reader.readAsText(file, 'utf-8')
   }
 
   const autoGeneratePasswords = () => {
@@ -828,18 +836,20 @@ function ImportTab({ clubId }: { clubId: string }) {
   }
 
   const handleImport = async () => {
-    if (!rows.length) return
-    const valid = rows.filter((r) => r.email && r.nombre)
-    if (!valid.length) return toast.error('No hay filas válidas (se requiere nombre y email)')
+    const valid = rows.filter((r) => r.nombre.trim() && r.email.trim())
+    if (!valid.length) return toast.error('No hay filas válidas para importar')
+    const missing = valid.filter((r) => !r.password.trim())
+    if (missing.length) return toast.error('Genera contraseñas para todos los socios antes de importar')
+
     setImporting(true)
     const res = await fetch(`/api/clubs/${clubId}/members/import`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         members: valid.map((r) => ({
-          name: r.nombre,
-          email: r.email,
-          ...(r.password ? { password: r.password } : {}),
+          name: r.nombre.trim(),
+          email: r.email.trim().toLowerCase(),
+          password: r.password.trim(),
         })),
       }),
     })

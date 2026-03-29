@@ -9,7 +9,18 @@ const CreateVoteSchema = z.object({
   title: z.string().min(3).max(300),
   description: z.string().max(1000).optional(),
   options: z.array(z.string().min(1).max(200)).min(2).max(10),
+  startsAt: z.string().datetime().optional().nullable(),
+  endsAt: z.string().datetime().optional().nullable(),
 })
+
+// Derives the display status of a vote based on fields + current time
+function voteStatus(vote: { active: boolean; startsAt: Date | null; endsAt: Date | null }): 'scheduled' | 'active' | 'closed' {
+  if (!vote.active) return 'closed'
+  const now = new Date()
+  if (vote.startsAt && vote.startsAt > now) return 'scheduled'
+  if (vote.endsAt && vote.endsAt <= now) return 'closed'
+  return 'active'
+}
 
 // GET /api/clubs/[clubId]/votes
 export async function GET(req: NextRequest, { params }: { params: { clubId: string } }) {
@@ -17,12 +28,12 @@ export async function GET(req: NextRequest, { params }: { params: { clubId: stri
   if (!access.ok) return access.response
 
   const { page, pageSize, skip, take } = getPaginationParams(req.nextUrl.searchParams)
-  const activeOnly = req.nextUrl.searchParams.get('active') !== 'false'
+  // active=false → return all (admin view); default → only active+scheduled (socio view)
+  const allVotes = req.nextUrl.searchParams.get('active') === 'false'
 
-  const where = {
-    clubId: params.clubId,
-    ...(activeOnly ? { active: true } : {}),
-  }
+  const where = allVotes
+    ? { clubId: params.clubId }
+    : { clubId: params.clubId, active: true }
 
   const [votes, total] = await Promise.all([
     prisma.vote.findMany({
@@ -41,7 +52,7 @@ export async function GET(req: NextRequest, { params }: { params: { clubId: stri
     prisma.vote.count({ where }),
   ])
 
-  // For SOCIO, inject whether the user has already voted
+  // Inject per-user voting status + computed status string
   const userId = access.userId
   const votesWithUserStatus = await Promise.all(
     votes.map(async (vote) => {
@@ -51,6 +62,7 @@ export async function GET(req: NextRequest, { params }: { params: { clubId: stri
       })
       return {
         ...vote,
+        status: voteStatus(vote),
         userVoted: !!userResponse,
         userOptionId: userResponse?.optionId ?? null,
       }
@@ -69,11 +81,19 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
   const parsed = CreateVoteSchema.safeParse(body)
   if (!parsed.success) return err(parsed.error.errors[0].message)
 
+  if (parsed.data.startsAt && parsed.data.endsAt) {
+    if (new Date(parsed.data.endsAt) <= new Date(parsed.data.startsAt)) {
+      return err('La fecha de cierre debe ser posterior a la de inicio')
+    }
+  }
+
   const vote = await prisma.vote.create({
     data: {
       clubId: params.clubId,
       title: parsed.data.title,
       description: parsed.data.description,
+      startsAt: parsed.data.startsAt ? new Date(parsed.data.startsAt) : null,
+      endsAt: parsed.data.endsAt ? new Date(parsed.data.endsAt) : null,
       options: {
         create: parsed.data.options.map((text, order) => ({ text, order })),
       },
@@ -90,7 +110,7 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
     details: { title: vote.title, options: parsed.data.options.length },
   })
 
-  // Notify all members
+  // Notify all approved members — link is club-scoped for correct navigation
   const members = await prisma.clubMembership.findMany({
     where: { clubId: params.clubId, status: 'APPROVED', clubRole: 'MEMBER' },
     select: { userId: true },
@@ -102,7 +122,7 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
         clubId: params.clubId,
         title: 'Nueva votación disponible',
         message: `Hay una nueva votación: "${vote.title}". ¡Tu voto cuenta!`,
-        link: '/socio/votes',
+        link: `/clubs/${params.clubId}/socio/votes`,
       })),
     })
   }

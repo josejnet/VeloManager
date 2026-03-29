@@ -8,7 +8,7 @@ import { ok, err } from '@/lib/utils'
 const MemberRowSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1).max(100),
-  password: z.string().min(1).optional(),
+  password: z.string().min(6).optional(), // plain-text — will be hashed before storing
   province: z.string().optional(),
   locality: z.string().optional(),
 })
@@ -43,8 +43,18 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
 
   for (const row of members) {
     try {
-      // Upsert the user by email
+      // Hash password if provided
       const hashedPassword = row.password ? await hash(row.password, 10) : undefined
+
+      // Upsert user by email.
+      // - On CREATE: set all fields including password so the user can log in immediately.
+      // - On UPDATE: only fill in password if the existing account has none (imported before),
+      //   and only update location fields — never overwrite name or a real user's password.
+      const existing = await prisma.user.findUnique({
+        where: { email: row.email.toLowerCase() },
+        select: { id: true, password: true },
+      })
+
       const user = await prisma.user.upsert({
         where: { email: row.email.toLowerCase() },
         create: {
@@ -55,21 +65,21 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
           locality: row.locality ?? null,
         },
         update: {
-          // Only update location/password fields; do not overwrite name to preserve existing users
+          // Backfill password only if the account currently has none (prev import without password)
+          ...(hashedPassword && !existing?.password && { password: hashedPassword }),
           ...(row.province !== undefined && { province: row.province }),
           ...(row.locality !== undefined && { locality: row.locality }),
-          ...(hashedPassword !== undefined && { password: hashedPassword }),
         },
         select: { id: true },
       })
 
       // Check if membership already exists
-      const existing = await prisma.clubMembership.findUnique({
+      const existingMembership = await prisma.clubMembership.findUnique({
         where: { userId_clubId: { userId: user.id, clubId: params.clubId } },
-        select: { id: true, status: true },
+        select: { id: true },
       })
 
-      if (existing) {
+      if (existingMembership) {
         skipped++
         continue
       }

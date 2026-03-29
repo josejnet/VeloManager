@@ -654,6 +654,8 @@ model Vote {
   title       String
   description String?
   active      Boolean   @default(true)
+  startsAt    DateTime?  // null = open immediately on creation
+  endsAt      DateTime?  // null = manual close only
   closedAt    DateTime?
   startsAt    DateTime?
   endsAt      DateTime?

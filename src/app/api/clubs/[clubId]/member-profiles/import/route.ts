@@ -97,7 +97,7 @@ export async function POST(
   try {
     workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true })
   } catch {
-    return err('No se pudo leer el archivo. Asegúrate de que es un Excel válido (.xlsx / .xls)', 400)
+    return err('No se pudo leer el archivo. Asegúrate de que es un Excel (.xlsx / .xls) o CSV válido', 400)
   }
 
   const sheetName = workbook.SheetNames[0]

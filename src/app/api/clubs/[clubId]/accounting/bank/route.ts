@@ -15,9 +15,12 @@ export async function GET(req: NextRequest, { params }: { params: { clubId: stri
   const type = req.nextUrl.searchParams.get('type') as 'INCOME' | 'EXPENSE' | null
   const source = req.nextUrl.searchParams.get('source') ?? undefined
 
-  // Ensure bank account exists (accounting must be enabled for the club)
-  const bankAccount = await prisma.bankAccount.findUnique({ where: { clubId: params.clubId } })
-  if (!bankAccount) return err('Cuenta bancaria no encontrada', 404)
+  // Auto-create bank account on first access so accounting works out of the box
+  const bankAccount = await prisma.bankAccount.upsert({
+    where: { clubId: params.clubId },
+    create: { clubId: params.clubId },
+    update: {},
+  })
 
   const where = {
     clubId: params.clubId,
