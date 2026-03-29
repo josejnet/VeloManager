@@ -17,26 +17,30 @@ export async function GET(_req: NextRequest) {
   const cookieStore = await cookies()
   const activeClubId = cookieStore.get('activeClubId')?.value
 
-  const membership = await prisma.clubMembership.findFirst({
-    where: {
-      userId,
-      status: 'APPROVED',
-      ...(activeClubId ? { clubId: activeClubId } : {}),
-    },
-    orderBy: { joinedAt: 'desc' },
-    include: {
-      club: {
-        select: {
-          id: true,
-          name: true,
-          slogan: true,
-          sport: true,
-          logoUrl: true,
-          colorTheme: true,
+  let membership = activeClubId
+    ? await prisma.clubMembership.findFirst({
+        where: { userId, status: 'APPROVED', clubId: activeClubId },
+        orderBy: { joinedAt: 'desc' },
+        include: {
+          club: {
+            select: { id: true, name: true, slogan: true, sport: true, logoUrl: true, colorTheme: true },
+          },
+        },
+      })
+    : null
+
+  // Fall back to any approved membership if cookie is stale/missing
+  if (!membership) {
+    membership = await prisma.clubMembership.findFirst({
+      where: { userId, status: 'APPROVED' },
+      orderBy: { joinedAt: 'desc' },
+      include: {
+        club: {
+          select: { id: true, name: true, slogan: true, sport: true, logoUrl: true, colorTheme: true },
         },
       },
-    },
-  })
+    })
+  }
 
   if (!membership) return err('No perteneces a ningún club activo', 404)
 
@@ -96,7 +100,7 @@ export async function GET(_req: NextRequest) {
       },
     }),
 
-    // Active votes + whether this user has voted
+    // Active votes + whether this user has voted + results
     prisma.vote.findMany({
       where: { clubId, active: true },
       orderBy: { createdAt: 'desc' },
@@ -104,12 +108,22 @@ export async function GET(_req: NextRequest) {
       select: {
         id: true,
         title: true,
+        startsAt: true,
+        endsAt: true,
         closedAt: true,
         _count: { select: { responses: true } },
         responses: {
           where: { userId },
-          select: { id: true },
+          select: { id: true, optionId: true },
           take: 1,
+        },
+        options: {
+          orderBy: { order: 'asc' },
+          select: {
+            id: true,
+            text: true,
+            _count: { select: { responses: true } },
+          },
         },
       },
     }),
@@ -209,13 +223,36 @@ export async function GET(_req: NextRequest) {
       status: q.status,
       dueDate: q.dueDate,
     })),
-    activeVotes: activeVotes.map((v) => ({
-      id: v.id,
-      title: v.title,
-      closedAt: v.closedAt,
-      totalResponses: v._count.responses,
-      hasVoted: v.responses.length > 0,
-    })),
+    activeVotes: activeVotes.map((v) => {
+      const totalResponses = v._count.responses
+      const myResponse = v.responses[0] ?? null
+      const voteNow = new Date()
+      let status: 'scheduled' | 'active' | 'closed'
+      if (v.closedAt) {
+        status = 'closed'
+      } else if (v.startsAt && v.startsAt > voteNow) {
+        status = 'scheduled'
+      } else if (v.endsAt && v.endsAt < voteNow) {
+        status = 'closed'
+      } else {
+        status = 'active'
+      }
+      return {
+        id: v.id,
+        title: v.title,
+        status,
+        closedAt: v.closedAt,
+        endsAt: v.endsAt,
+        totalResponses,
+        hasVoted: myResponse !== null,
+        myOptionId: myResponse?.optionId ?? null,
+        options: v.options.map((o) => ({
+          id: o.id,
+          text: o.text,
+          count: o._count.responses,
+        })),
+      }
+    }),
     announcements: announcements.map((a) => ({
       id: a.id,
       title: a.title,

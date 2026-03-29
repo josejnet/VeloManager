@@ -28,14 +28,26 @@ export async function GET(req: NextRequest, { params }: { params: { clubId: stri
     ...(source ? { source: source as never } : {}),
   }
 
+  const currentYear = new Date().getFullYear()
+  const yearStart = new Date(`${currentYear}-01-01T00:00:00.000Z`)
+  const yearEnd = new Date(`${currentYear + 1}-01-01T00:00:00.000Z`)
+
   // Compute balance via aggregation — never stored, always authoritative
-  const [incomeAgg, expenseAgg, movements, total] = await Promise.all([
+  const [incomeAgg, expenseAgg, yearIncomeAgg, yearExpenseAgg, movements, total] = await Promise.all([
     prisma.bankMovement.aggregate({
       where: { clubId: params.clubId, type: 'INCOME' },
       _sum: { amount: true },
     }),
     prisma.bankMovement.aggregate({
       where: { clubId: params.clubId, type: 'EXPENSE' },
+      _sum: { amount: true },
+    }),
+    prisma.bankMovement.aggregate({
+      where: { clubId: params.clubId, type: 'INCOME', date: { gte: yearStart, lt: yearEnd } },
+      _sum: { amount: true },
+    }),
+    prisma.bankMovement.aggregate({
+      where: { clubId: params.clubId, type: 'EXPENSE', date: { gte: yearStart, lt: yearEnd } },
       _sum: { amount: true },
     }),
     prisma.bankMovement.findMany({
@@ -53,6 +65,8 @@ export async function GET(req: NextRequest, { params }: { params: { clubId: stri
   const totalIncome = Number(incomeAgg._sum.amount ?? 0)
   const totalExpense = Number(expenseAgg._sum.amount ?? 0)
   const balance = totalIncome - totalExpense
+  const yearIncome = Number(yearIncomeAgg._sum.amount ?? 0)
+  const yearExpense = Number(yearExpenseAgg._sum.amount ?? 0)
 
   return ok({
     bankAccount: {
@@ -61,10 +75,13 @@ export async function GET(req: NextRequest, { params }: { params: { clubId: stri
       bankName: bankAccount.bankName,
       iban: bankAccount.iban,
       holder: bankAccount.holder,
-      // Computed — authoritative
+      // Computed — authoritative (all-time for balance, current year for income/expense display)
       balance,
       totalIncome,
       totalExpense,
+      yearIncome,
+      yearExpense,
+      currentYear,
     },
     ledger: buildPaginatedResponse(movements, total, page, pageSize),
   })

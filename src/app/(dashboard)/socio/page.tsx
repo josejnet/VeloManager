@@ -96,12 +96,22 @@ interface Quota {
   dueDate: string | null
 }
 
+interface VoteOptionResult {
+  id: string
+  text: string
+  count: number
+}
+
 interface ActiveVote {
   id: string
   title: string
+  status: 'scheduled' | 'active' | 'closed'
   closedAt: string | null
+  endsAt: string | null
   totalResponses: number
   hasVoted: boolean
+  myOptionId: string | null
+  options: VoteOptionResult[]
 }
 
 interface Announcement {
@@ -243,8 +253,11 @@ export default function SocioDashboardPage() {
 
   useEffect(() => {
     fetch('/api/dashboard/user')
-      .then((r) => r.json())
-      .then((json: DashboardData) => setData(json))
+      .then(async (r) => {
+        if (!r.ok) return null
+        return r.json() as Promise<DashboardData>
+      })
+      .then((json) => setData(json))
       .finally(() => setLoading(false))
   }, [])
 
@@ -562,36 +575,82 @@ export default function SocioDashboardPage() {
               <div className="flex items-center justify-between px-5 pt-5 pb-3">
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
                   <CheckSquare className="h-4 w-4 text-indigo-500" />
-                  Votaciones activas
+                  Votaciones
                 </h3>
               </div>
               <div className="px-5 pb-5 divide-y divide-gray-50">
                 {activeVotes.map((vote) => (
-                  <div
-                    key={vote.id}
-                    className="flex items-center justify-between py-3 hover:bg-gray-50 rounded-lg -mx-2 px-2 transition-colors"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-gray-900 truncate">{vote.title}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {vote.totalResponses} respuesta(s)
-                        {vote.closedAt && ` · Cierra ${fmtDate(vote.closedAt)}`}
-                      </p>
+                  <div key={vote.id} className="py-3 space-y-2">
+                    {/* Header row */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-gray-900">{vote.title}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {vote.totalResponses} voto(s)
+                          {vote.status === 'active' && vote.endsAt && ` · Cierra ${fmtDate(vote.endsAt)}`}
+                          {vote.status === 'closed' && vote.closedAt && ` · Cerrada ${fmtDate(vote.closedAt)}`}
+                        </p>
+                      </div>
+                      <div className="flex-shrink-0 flex flex-col items-end gap-1.5">
+                        {vote.status === 'active' && (
+                          <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-medium">
+                            Abierta
+                          </span>
+                        )}
+                        {vote.status === 'scheduled' && (
+                          <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium">
+                            Programada
+                          </span>
+                        )}
+                        {vote.status === 'closed' && (
+                          <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">
+                            Cerrada
+                          </span>
+                        )}
+                        {vote.status === 'active' && !vote.hasVoted && (
+                          <Link
+                            href={`${baseHref}/socio/votes`}
+                            className="px-3 py-1 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700"
+                          >
+                            Votar
+                          </Link>
+                        )}
+                        {vote.hasVoted && (
+                          <span className="text-xs text-indigo-600 font-medium">Votado ✓</span>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex-shrink-0 ml-3">
-                      {vote.hasVoted ? (
-                        <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">
-                          Votado ✓
-                        </span>
-                      ) : (
-                        <Link
-                          href={`${baseHref}/socio/votes`}
-                          className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700"
-                        >
-                          Votar
-                        </Link>
-                      )}
-                    </div>
+
+                    {/* Results bars */}
+                    {vote.options.length > 0 && vote.totalResponses > 0 && (
+                      <div className="space-y-1.5">
+                        {vote.options.map((opt) => {
+                          const pct = vote.totalResponses > 0 ? Math.round((opt.count / vote.totalResponses) * 100) : 0
+                          const isMyVote = vote.myOptionId === opt.id
+                          return (
+                            <div key={opt.id}>
+                              <div className="flex items-center justify-between mb-0.5">
+                                <span className={`text-xs truncate ${isMyVote ? 'font-semibold text-indigo-700' : 'text-gray-600'}`}>
+                                  {isMyVote && '✓ '}{opt.text}
+                                </span>
+                                <span className="text-xs text-gray-400 ml-2 flex-shrink-0">{pct}%</span>
+                              </div>
+                              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all ${isMyVote ? 'bg-indigo-500' : 'bg-gray-300'}`}
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {/* No votes yet message */}
+                    {vote.totalResponses === 0 && vote.status === 'active' && !vote.hasVoted && (
+                      <p className="text-xs text-gray-400 italic">Sé el primero en votar</p>
+                    )}
                   </div>
                 ))}
               </div>

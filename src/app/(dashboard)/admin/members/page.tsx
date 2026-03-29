@@ -9,11 +9,12 @@ import { Modal } from '@/components/ui/Modal'
 import { Input, Select } from '@/components/ui/Input'
 import { Pagination } from '@/components/ui/Pagination'
 import { fmtDate, fmtCurrency } from '@/lib/utils'
-import { Check, X, Plus, User, Mail, Link2, Copy, Send, Trash2, Ban, ShieldCheck, FileText } from 'lucide-react'
+import { Check, X, Plus, User, Mail, Link2, Copy, Send, Trash2, Ban, ShieldCheck, FileText, ChevronUp, ChevronDown, ChevronsUpDown, KeyRound, Pencil } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { MemberWithUser, PaginatedResponse } from '@/types'
 
 type TabType = 'APPROVED' | 'PENDING' | 'SUSPENDED' | 'BANNED' | 'invitations' | 'import'
+type SortField = 'name' | 'email' | 'joinedAt' | 'clubRole'
 
 type Invitation = {
   id: string
@@ -42,13 +43,23 @@ export default function MembersPage() {
   const [clubId, setClubId] = useState<string>('')
   const [tab, setTab] = useState<TabType>('APPROVED')
   const [page, setPage] = useState(1)
+  const [sort, setSort] = useState<SortField>('name')
+  const [order, setOrder] = useState<'asc' | 'desc'>('asc')
   const [data, setData] = useState<PaginatedResponse<MemberWithUser> | null>(null)
   const [loading, setLoading] = useState(false)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [resetPwModal, setResetPwModal] = useState<{ open: boolean; memberId: string; memberName: string; password: string | null }>({ open: false, memberId: '', memberName: '', password: null })
 
-  // Quotas
+  // Quotas — assign new
   const [quotaModal, setQuotaModal] = useState<{ open: boolean; membershipId: string; memberName: string }>({ open: false, membershipId: '', memberName: '' })
-  const [quotaForm, setQuotaForm] = useState({ year: new Date().getFullYear(), amount: '' })
+  const [quotaForm, setQuotaForm] = useState({ year: new Date().getFullYear(), amount: '', dueDate: '', paymentMode: 'pending' as 'pending' | 'paid' | 'historical' })
+
+  // Quotas — edit existing
+  type QuotaEditTarget = { open: boolean; quotaId: string; memberName: string; year: number; amount: number; status: string; dueDate: string | null }
+  const [quotaEditModal, setQuotaEditModal] = useState<QuotaEditTarget>({ open: false, quotaId: '', memberName: '', year: 0, amount: 0, status: '', dueDate: null })
+  const [quotaEditAmount, setQuotaEditAmount] = useState('')
+  const [quotaEditDueDate, setQuotaEditDueDate] = useState('')
+  const [savingQuota, setSavingQuota] = useState(false)
 
   // Confirm destructive modal
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null)
@@ -87,10 +98,10 @@ export default function MembersPage() {
   const fetchMembers = useCallback(async () => {
     if (!clubId || tab === 'invitations') return
     setLoading(true)
-    const res = await fetch(`/api/clubs/${clubId}/members?status=${tab}&page=${page}`)
+    const res = await fetch(`/api/clubs/${clubId}/members?status=${tab}&page=${page}&sort=${sort}&order=${order}`)
     if (res.ok) setData(await res.json())
     setLoading(false)
-  }, [clubId, tab, page])
+  }, [clubId, tab, page, sort, order])
 
   const fetchPendingCount = useCallback(async () => {
     if (!clubId) return
@@ -117,29 +128,91 @@ export default function MembersPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, ...extra }),
     })
+    const d = await res.json()
     setUpdatingId(null)
     if (res.ok) {
-      toast.success('Acción realizada')
+      if (action === 'reset_password' && d.password) {
+        setResetPwModal({ open: true, memberId, memberName: extra?.memberName as string ?? '', password: d.password })
+      } else {
+        toast.success('Acción realizada')
+      }
       setConfirmAction(null)
       setActionReason('')
       setRoleModal(null)
       fetchMembers()
       fetchPendingCount()
     } else {
-      const d = await res.json()
       toast.error(d.error ?? 'Error al procesar la acción')
     }
   }
 
+  const toggleSort = (field: SortField) => {
+    if (sort === field) {
+      setOrder((o) => o === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSort(field)
+      setOrder('asc')
+    }
+    setPage(1)
+  }
+
+  function SortIcon({ field }: { field: SortField }) {
+    if (sort !== field) return <ChevronsUpDown className="h-3 w-3 text-gray-300 inline ml-0.5" />
+    return order === 'asc'
+      ? <ChevronUp className="h-3 w-3 text-primary inline ml-0.5" />
+      : <ChevronDown className="h-3 w-3 text-primary inline ml-0.5" />
+  }
+
   const assignQuota = async () => {
     if (!quotaForm.amount) return toast.error('Introduce un importe')
+    const body: Record<string, unknown> = {
+      membershipId: quotaModal.membershipId,
+      year: quotaForm.year,
+      amount: parseFloat(quotaForm.amount),
+      dueDate: quotaForm.dueDate || undefined,
+    }
+    if (quotaForm.paymentMode === 'paid') body.markPaid = true
+    if (quotaForm.paymentMode === 'historical') body.markPaidHistorical = true
     const res = await fetch(`/api/clubs/${clubId}/accounting/quotas`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ membershipId: quotaModal.membershipId, year: quotaForm.year, amount: parseFloat(quotaForm.amount) }),
+      body: JSON.stringify(body),
     })
-    if (res.ok) { toast.success('Cuota asignada'); setQuotaModal({ ...quotaModal, open: false }); fetchMembers() }
-    else { const d = await res.json(); toast.error(d.error ?? 'Error') }
+    if (res.ok) {
+      const msg = quotaForm.paymentMode === 'paid'
+        ? 'Cuota asignada y registrada en contabilidad'
+        : quotaForm.paymentMode === 'historical'
+          ? 'Cuota asignada como pagada (sin impacto contable)'
+          : 'Cuota asignada como pendiente'
+      toast.success(msg)
+      setQuotaModal({ ...quotaModal, open: false })
+      setQuotaForm({ year: new Date().getFullYear(), amount: '', dueDate: '', paymentMode: 'pending' })
+      fetchMembers()
+    } else {
+      const d = await res.json(); toast.error(d.error ?? 'Error')
+    }
+  }
+
+  const doQuotaEdit = async (action: string) => {
+    setSavingQuota(true)
+    const body: Record<string, unknown> = { action, quotaId: quotaEditModal.quotaId }
+    if (action === 'edit') {
+      if (quotaEditAmount) body.amount = parseFloat(quotaEditAmount)
+      body.dueDate = quotaEditDueDate || null
+    }
+    const res = await fetch(`/api/clubs/${clubId}/accounting/quotas`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    setSavingQuota(false)
+    if (res.ok) {
+      toast.success('Cuota actualizada')
+      setQuotaEditModal({ ...quotaEditModal, open: false })
+      fetchMembers()
+    } else {
+      const d = await res.json(); toast.error(d.error ?? 'Error')
+    }
   }
 
   const createInvitation = async () => {
@@ -257,9 +330,15 @@ export default function MembersPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-xs text-gray-500 border-b border-gray-100">
-                      <th className="text-left py-2.5 font-medium">Socio</th>
-                      <th className="text-left py-2.5 font-medium">Estado</th>
-                      <th className="text-left py-2.5 font-medium">Desde</th>
+                      <th className="text-left py-2.5 font-medium cursor-pointer select-none" onClick={() => toggleSort('name')}>
+                        Socio <SortIcon field="name" />
+                      </th>
+                      <th className="text-left py-2.5 font-medium cursor-pointer select-none" onClick={() => toggleSort('clubRole')}>
+                        Rol <SortIcon field="clubRole" />
+                      </th>
+                      <th className="text-left py-2.5 font-medium cursor-pointer select-none" onClick={() => toggleSort('joinedAt')}>
+                        Desde <SortIcon field="joinedAt" />
+                      </th>
                       {tab === 'APPROVED' && <th className="text-left py-2.5 font-medium">Cuotas</th>}
                       {tab === 'BANNED' && <th className="text-left py-2.5 font-medium">Motivo</th>}
                       <th className="text-right py-2.5 font-medium">Acciones</th>
@@ -279,13 +358,35 @@ export default function MembersPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="py-3"><MemberStatusBadge status={m.status} /></td>
+                        <td className="py-3">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${m.clubRole === 'ADMIN' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
+                            {m.clubRole === 'ADMIN' ? 'Admin' : 'Socio'}
+                          </span>
+                        </td>
                         <td className="py-3 text-gray-500">{m.joinedAt ? fmtDate(m.joinedAt) : '—'}</td>
                         {tab === 'APPROVED' && (
                           <td className="py-3">
                             {m.quotas.length === 0
-                              ? <span className="text-gray-400">Sin cuotas</span>
-                              : m.quotas.slice(0, 2).map((q) => <QuotaStatusBadge key={q.id} status={q.status} />)}
+                              ? <span className="text-gray-400 text-xs">Sin cuotas</span>
+                              : <div className="flex flex-wrap gap-1">
+                                  {m.quotas.slice(0, 3).map((q) => (
+                                    <button
+                                      key={q.id}
+                                      title={`Editar cuota ${q.year}`}
+                                      onClick={() => {
+                                        setQuotaEditModal({ open: true, quotaId: q.id, memberName: m.user.name, year: q.year, amount: Number(q.amount), status: q.status, dueDate: q.dueDate as string | null })
+                                        setQuotaEditAmount(String(Number(q.amount)))
+                                        setQuotaEditDueDate(q.dueDate ? new Date(q.dueDate).toISOString().split('T')[0] : '')
+                                      }}
+                                      className="inline-flex items-center gap-1 hover:opacity-75 transition-opacity cursor-pointer"
+                                    >
+                                      <span className="text-xs text-gray-400">{q.year}</span>
+                                      <QuotaStatusBadge status={q.status} />
+                                    </button>
+                                  ))}
+                                  {m.quotas.length > 3 && <span className="text-xs text-gray-400 self-center">+{m.quotas.length - 3}</span>}
+                                </div>
+                            }
                           </td>
                         )}
                         {tab === 'BANNED' && (
@@ -309,6 +410,10 @@ export default function MembersPage() {
                               <>
                                 <Button size="sm" variant="outline" onClick={() => setQuotaModal({ open: true, membershipId: m.id, memberName: m.user.name })}>
                                   <Plus className="h-3 w-3" /> Cuota
+                                </Button>
+                                <Button size="sm" variant="ghost" title="Resetear contraseña" disabled={updatingId === m.id}
+                                  onClick={() => doMemberAction(m.id, 'reset_password', { memberName: m.user.name })}>
+                                  <KeyRound className="h-3 w-3" />
                                 </Button>
                                 <Button size="sm" variant="ghost" onClick={() => { setRoleModal({ open: true, memberId: m.id, memberName: m.user.name, currentRole: m.clubRole }); setNewRole(m.clubRole === 'ADMIN' ? 'MEMBER' : 'ADMIN') }}>
                                   Rol
@@ -568,10 +673,99 @@ export default function MembersPage() {
             onChange={(e) => setQuotaForm({ ...quotaForm, year: parseInt(e.target.value) })} />
           <Input label="Importe (€)" type="number" step="0.01" placeholder="0.00"
             value={quotaForm.amount} onChange={(e) => setQuotaForm({ ...quotaForm, amount: e.target.value })} />
+          <Input label="Fecha de vencimiento (opcional)" type="date"
+            value={quotaForm.dueDate} onChange={(e) => setQuotaForm({ ...quotaForm, dueDate: e.target.value })} />
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-gray-600">Estado de pago</p>
+            {([ ['pending', 'Pendiente', 'La cuota queda pendiente de pago'], ['historical', 'Pagada en el pasado', 'Se marca como pagada sin registrar ingreso contable'], ['paid', 'Pagada ahora', 'Se marca como pagada y se registra ingreso en el libro de bancos'] ] as const).map(([value, label, hint]) => (
+              <label key={value} className="flex items-start gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors hover:bg-gray-50" style={{ borderColor: quotaForm.paymentMode === value ? 'var(--color-primary, #2563eb)' : '#e5e7eb' }}>
+                <input type="radio" name="paymentMode" value={value} checked={quotaForm.paymentMode === value}
+                  onChange={() => setQuotaForm({ ...quotaForm, paymentMode: value })}
+                  className="mt-0.5 h-4 w-4 text-primary border-gray-300" />
+                <div>
+                  <p className="text-sm font-medium text-gray-800">{label}</p>
+                  <p className="text-xs text-gray-400">{hint}</p>
+                </div>
+              </label>
+            ))}
+          </div>
           <div className="flex gap-2 pt-2">
             <Button className="flex-1" onClick={assignQuota}>Asignar cuota</Button>
             <Button variant="outline" className="flex-1" onClick={() => setQuotaModal({ ...quotaModal, open: false })}>Cancelar</Button>
           </div>
+        </div>
+      </Modal>
+
+      {/* ── Edit quota modal ── */}
+      <Modal open={quotaEditModal.open} onClose={() => setQuotaEditModal({ ...quotaEditModal, open: false })}
+        title={`Cuota ${quotaEditModal.year} — ${quotaEditModal.memberName}`} size="sm">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-500">Estado actual:</span>
+            <QuotaStatusBadge status={quotaEditModal.status} />
+          </div>
+
+          {quotaEditModal.status !== 'PAID' && (
+            <>
+              <Input label="Importe (€)" type="number" step="0.01" value={quotaEditAmount}
+                onChange={(e) => setQuotaEditAmount(e.target.value)} />
+              <Input label="Fecha de vencimiento" type="date" value={quotaEditDueDate}
+                onChange={(e) => setQuotaEditDueDate(e.target.value)} />
+              <Button className="w-full" variant="outline" disabled={savingQuota}
+                onClick={() => doQuotaEdit('edit')}>
+                {savingQuota ? 'Guardando...' : 'Guardar cambios'}
+              </Button>
+              <div className="border-t border-gray-100 pt-3 space-y-2">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Cambiar estado</p>
+                <div className="flex gap-2">
+                  <Button className="flex-1" variant="outline" disabled={savingQuota}
+                    onClick={() => doQuotaEdit('mark_paid_historical')}>
+                    Pagada en el pasado
+                  </Button>
+                  <Button className="flex-1" disabled={savingQuota}
+                    onClick={() => doQuotaEdit('mark_paid')}>
+                    Pagada (contabilidad)
+                  </Button>
+                </div>
+                {quotaEditModal.status === 'PENDING' && (
+                  <Button className="w-full" variant="ghost" disabled={savingQuota}
+                    onClick={() => doQuotaEdit('mark_overdue')}>
+                    Marcar como vencida
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
+
+          {quotaEditModal.status === 'PAID' && (
+            <div className="space-y-3">
+              <p className="text-xs text-gray-500">
+                Importe: <strong>{Number(quotaEditModal.amount).toFixed(2)} €</strong>
+              </p>
+              <Button className="w-full" variant="ghost" disabled={savingQuota}
+                onClick={() => doQuotaEdit('mark_pending')}>
+                {savingQuota ? 'Revirtiendo...' : 'Revertir a pendiente'}
+              </Button>
+              <p className="text-xs text-gray-400 text-center">Solo posible si no tiene movimiento contable asociado.</p>
+            </div>
+          )}
+
+          <Button variant="outline" className="w-full" onClick={() => setQuotaEditModal({ ...quotaEditModal, open: false })}>Cerrar</Button>
+        </div>
+      </Modal>
+
+      {/* ── Password reset modal ── */}
+      <Modal open={resetPwModal.open} onClose={() => setResetPwModal({ ...resetPwModal, open: false, password: null })}
+        title={`Contraseña reseteada — ${resetPwModal.memberName}`} size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">La contraseña ha sido generada. Compártela con el socio. No se volverá a mostrar.</p>
+          <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl border border-gray-200">
+            <code className="flex-1 text-lg font-mono font-bold text-gray-900 tracking-widest">{resetPwModal.password}</code>
+            <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(resetPwModal.password ?? ''); toast.success('Copiado') }}>
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+          <Button className="w-full" onClick={() => setResetPwModal({ ...resetPwModal, open: false, password: null })}>Entendido</Button>
         </div>
       </Modal>
     </div>
@@ -660,12 +854,18 @@ function ImportTab({ clubId }: { clubId: string }) {
       }),
     })
     setImporting(false)
-
     if (res.ok) {
       const d = await res.json()
-      toast.success(`${d.imported} socios importados${d.skipped ? `, ${d.skipped} ya existían` : ''}`)
-      if (d.errors?.length) toast.error(`${d.errors.length} errores: ${d.errors[0].reason}`)
-      setRows([])
+      const parts = [`${d.imported} importados`]
+      if (d.skipped) parts.push(`${d.skipped} omitidos (ya existían)`)
+      if (d.errors?.length) parts.push(`${d.errors.length} con error`)
+      toast.success(parts.join(' · '))
+      if (d.errors?.length) {
+        d.errors.slice(0, 3).forEach((e: { email: string; reason: string }) =>
+          toast.error(`${e.email}: ${e.reason}`, { duration: 6000 })
+        )
+      }
+      if (d.imported > 0) setRows([])
     } else {
       const d = await res.json().catch(() => ({}))
       toast.error(d.error ?? 'Error al importar')

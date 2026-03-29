@@ -13,6 +13,15 @@ export async function GET(req: NextRequest, { params }: { params: { clubId: stri
 
   const { page, pageSize, skip, take } = getPaginationParams(req.nextUrl.searchParams)
   const status = (req.nextUrl.searchParams.get('status') ?? 'APPROVED') as MembershipStatus
+  const sortParam = req.nextUrl.searchParams.get('sort') ?? 'name'
+  const orderParam = (req.nextUrl.searchParams.get('order') ?? 'asc') as 'asc' | 'desc'
+
+  const ALLOWED_SORTS = ['name', 'email', 'joinedAt', 'clubRole', 'createdAt']
+  const sort = ALLOWED_SORTS.includes(sortParam) ? sortParam : 'name'
+  const orderBy: Record<string, 'asc' | 'desc'> | { user: Record<string, 'asc' | 'desc'> } =
+    sort === 'name'  ? { user: { name: orderParam } } :
+    sort === 'email' ? { user: { email: orderParam } } :
+    { [sort]: orderParam }
 
   const where = { clubId: params.clubId, status }
 
@@ -21,7 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: { clubId: stri
       where,
       skip,
       take,
-      orderBy: { createdAt: 'desc' },
+      orderBy,
       include: {
         user: { select: { id: true, email: true, name: true, avatarUrl: true, createdAt: true } },
         quotas: { orderBy: { year: 'desc' } },

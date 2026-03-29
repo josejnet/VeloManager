@@ -20,7 +20,7 @@ export default function LoginPage() {
     const res = await signIn('credentials', { ...form, redirect: false })
     setLoading(false)
     if (res?.error) return toast.error('Credenciales incorrectas')
-    router.push('/')
+    window.location.href = '/'
   }
 
   const oauthSignIn = (provider: string) => {

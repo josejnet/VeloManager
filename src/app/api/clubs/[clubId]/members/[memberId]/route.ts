@@ -1,9 +1,17 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
+import { hash } from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { requireClubAccess } from '@/lib/authz'
 import { writeAudit, AUDIT } from '@/lib/audit'
 import { ok, err } from '@/lib/utils'
+
+function generatePassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
+  let pwd = ''
+  for (let i = 0; i < 10; i++) pwd += chars[Math.floor(Math.random() * chars.length)]
+  return pwd
+}
 
 const UpdateMemberSchema = z.discriminatedUnion('action', [
   z.object({
@@ -30,6 +38,9 @@ const UpdateMemberSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('change_role'),
     role: z.enum(['ADMIN', 'MEMBER']),
+  }),
+  z.object({
+    action: z.literal('reset_password'),
   }),
 ])
 
@@ -333,6 +344,30 @@ export async function PATCH(
         details: { targetUser: membership.user.name, newRole: parsed.data.role },
       })
       break
+    }
+
+    case 'reset_password': {
+      if (membership.status !== 'APPROVED') return err('Solo se puede resetear la contraseña de miembros activos')
+
+      const plainPassword = generatePassword()
+      const hashed = await hash(plainPassword, 10)
+
+      await prisma.user.update({
+        where: { id: membership.userId },
+        data: { password: hashed },
+      })
+
+      await writeAudit({
+        clubId: params.clubId,
+        userId: access.userId,
+        action: 'MEMBER_PASSWORD_RESET',
+        entity: 'Member',
+        entityId: params.memberId,
+        details: { targetUser: membership.user.name },
+      })
+
+      // Return the plain password ONCE — it will not be stored in plaintext
+      return ok({ passwordReset: true, password: plainPassword })
     }
 
     default:
