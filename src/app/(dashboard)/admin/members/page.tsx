@@ -9,11 +9,12 @@ import { Modal } from '@/components/ui/Modal'
 import { Input, Select } from '@/components/ui/Input'
 import { Pagination } from '@/components/ui/Pagination'
 import { fmtDate, fmtCurrency } from '@/lib/utils'
-import { Check, X, Plus, User, Mail, Link2, Copy, Send, Trash2, Ban, ShieldCheck, FileText } from 'lucide-react'
+import { Check, X, Plus, User, Mail, Link2, Copy, Send, Trash2, Ban, ShieldCheck, FileText, ChevronUp, ChevronDown, ChevronsUpDown, KeyRound } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { MemberWithUser, PaginatedResponse } from '@/types'
 
 type TabType = 'APPROVED' | 'PENDING' | 'SUSPENDED' | 'BANNED' | 'invitations' | 'import'
+type SortField = 'name' | 'email' | 'joinedAt' | 'clubRole'
 
 type Invitation = {
   id: string
@@ -42,13 +43,16 @@ export default function MembersPage() {
   const [clubId, setClubId] = useState<string>('')
   const [tab, setTab] = useState<TabType>('APPROVED')
   const [page, setPage] = useState(1)
+  const [sort, setSort] = useState<SortField>('joinedAt')
+  const [order, setOrder] = useState<'asc' | 'desc'>('desc')
   const [data, setData] = useState<PaginatedResponse<MemberWithUser> | null>(null)
   const [loading, setLoading] = useState(false)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [resetPwModal, setResetPwModal] = useState<{ open: boolean; memberId: string; memberName: string; password: string | null }>({ open: false, memberId: '', memberName: '', password: null })
 
   // Quotas
   const [quotaModal, setQuotaModal] = useState<{ open: boolean; membershipId: string; memberName: string }>({ open: false, membershipId: '', memberName: '' })
-  const [quotaForm, setQuotaForm] = useState({ year: new Date().getFullYear(), amount: '' })
+  const [quotaForm, setQuotaForm] = useState({ year: new Date().getFullYear(), amount: '', markPaid: false })
 
   // Confirm destructive modal
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null)
@@ -87,10 +91,10 @@ export default function MembersPage() {
   const fetchMembers = useCallback(async () => {
     if (!clubId || tab === 'invitations') return
     setLoading(true)
-    const res = await fetch(`/api/clubs/${clubId}/members?status=${tab}&page=${page}`)
+    const res = await fetch(`/api/clubs/${clubId}/members?status=${tab}&page=${page}&sort=${sort}&order=${order}`)
     if (res.ok) setData(await res.json())
     setLoading(false)
-  }, [clubId, tab, page])
+  }, [clubId, tab, page, sort, order])
 
   const fetchPendingCount = useCallback(async () => {
     if (!clubId) return
@@ -117,18 +121,39 @@ export default function MembersPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, ...extra }),
     })
+    const d = await res.json()
     setUpdatingId(null)
     if (res.ok) {
-      toast.success('Acción realizada')
+      if (action === 'reset_password' && d.password) {
+        setResetPwModal({ open: true, memberId, memberName: extra?.memberName as string ?? '', password: d.password })
+      } else {
+        toast.success('Acción realizada')
+      }
       setConfirmAction(null)
       setActionReason('')
       setRoleModal(null)
       fetchMembers()
       fetchPendingCount()
     } else {
-      const d = await res.json()
       toast.error(d.error ?? 'Error al procesar la acción')
     }
+  }
+
+  const toggleSort = (field: SortField) => {
+    if (sort === field) {
+      setOrder((o) => o === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSort(field)
+      setOrder('asc')
+    }
+    setPage(1)
+  }
+
+  function SortIcon({ field }: { field: SortField }) {
+    if (sort !== field) return <ChevronsUpDown className="h-3 w-3 text-gray-300 inline ml-0.5" />
+    return order === 'asc'
+      ? <ChevronUp className="h-3 w-3 text-primary inline ml-0.5" />
+      : <ChevronDown className="h-3 w-3 text-primary inline ml-0.5" />
   }
 
   const assignQuota = async () => {
@@ -136,10 +161,21 @@ export default function MembersPage() {
     const res = await fetch(`/api/clubs/${clubId}/accounting/quotas`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ membershipId: quotaModal.membershipId, year: quotaForm.year, amount: parseFloat(quotaForm.amount) }),
+      body: JSON.stringify({
+        membershipId: quotaModal.membershipId,
+        year: quotaForm.year,
+        amount: parseFloat(quotaForm.amount),
+        markPaid: quotaForm.markPaid,
+      }),
     })
-    if (res.ok) { toast.success('Cuota asignada'); setQuotaModal({ ...quotaModal, open: false }); fetchMembers() }
-    else { const d = await res.json(); toast.error(d.error ?? 'Error') }
+    if (res.ok) {
+      toast.success(quotaForm.markPaid ? 'Cuota asignada y marcada como pagada' : 'Cuota asignada')
+      setQuotaModal({ ...quotaModal, open: false })
+      setQuotaForm({ year: new Date().getFullYear(), amount: '', markPaid: false })
+      fetchMembers()
+    } else {
+      const d = await res.json(); toast.error(d.error ?? 'Error')
+    }
   }
 
   const createInvitation = async () => {
@@ -257,9 +293,15 @@ export default function MembersPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-xs text-gray-500 border-b border-gray-100">
-                      <th className="text-left py-2.5 font-medium">Socio</th>
-                      <th className="text-left py-2.5 font-medium">Estado</th>
-                      <th className="text-left py-2.5 font-medium">Desde</th>
+                      <th className="text-left py-2.5 font-medium cursor-pointer select-none" onClick={() => toggleSort('name')}>
+                        Socio <SortIcon field="name" />
+                      </th>
+                      <th className="text-left py-2.5 font-medium cursor-pointer select-none" onClick={() => toggleSort('clubRole')}>
+                        Rol <SortIcon field="clubRole" />
+                      </th>
+                      <th className="text-left py-2.5 font-medium cursor-pointer select-none" onClick={() => toggleSort('joinedAt')}>
+                        Desde <SortIcon field="joinedAt" />
+                      </th>
                       {tab === 'APPROVED' && <th className="text-left py-2.5 font-medium">Cuotas</th>}
                       {tab === 'BANNED' && <th className="text-left py-2.5 font-medium">Motivo</th>}
                       <th className="text-right py-2.5 font-medium">Acciones</th>
@@ -279,7 +321,11 @@ export default function MembersPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="py-3"><MemberStatusBadge status={m.status} /></td>
+                        <td className="py-3">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${m.clubRole === 'ADMIN' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
+                            {m.clubRole === 'ADMIN' ? 'Admin' : 'Socio'}
+                          </span>
+                        </td>
                         <td className="py-3 text-gray-500">{m.joinedAt ? fmtDate(m.joinedAt) : '—'}</td>
                         {tab === 'APPROVED' && (
                           <td className="py-3">
@@ -309,6 +355,10 @@ export default function MembersPage() {
                               <>
                                 <Button size="sm" variant="outline" onClick={() => setQuotaModal({ open: true, membershipId: m.id, memberName: m.user.name })}>
                                   <Plus className="h-3 w-3" /> Cuota
+                                </Button>
+                                <Button size="sm" variant="ghost" title="Resetear contraseña" disabled={updatingId === m.id}
+                                  onClick={() => doMemberAction(m.id, 'reset_password', { memberName: m.user.name })}>
+                                  <KeyRound className="h-3 w-3" />
                                 </Button>
                                 <Button size="sm" variant="ghost" onClick={() => { setRoleModal({ open: true, memberId: m.id, memberName: m.user.name, currentRole: m.clubRole }); setNewRole(m.clubRole === 'ADMIN' ? 'MEMBER' : 'ADMIN') }}>
                                   Rol
@@ -568,10 +618,35 @@ export default function MembersPage() {
             onChange={(e) => setQuotaForm({ ...quotaForm, year: parseInt(e.target.value) })} />
           <Input label="Importe (€)" type="number" step="0.01" placeholder="0.00"
             value={quotaForm.amount} onChange={(e) => setQuotaForm({ ...quotaForm, amount: e.target.value })} />
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={quotaForm.markPaid}
+              onChange={(e) => setQuotaForm({ ...quotaForm, markPaid: e.target.checked })}
+              className="h-4 w-4 rounded border-gray-300 text-primary"
+            />
+            <span className="text-sm text-gray-700">Marcar como pagada</span>
+            <span className="text-xs text-gray-400">(registra ingreso en libro de bancos)</span>
+          </label>
           <div className="flex gap-2 pt-2">
             <Button className="flex-1" onClick={assignQuota}>Asignar cuota</Button>
             <Button variant="outline" className="flex-1" onClick={() => setQuotaModal({ ...quotaModal, open: false })}>Cancelar</Button>
           </div>
+        </div>
+      </Modal>
+
+      {/* ── Password reset modal ── */}
+      <Modal open={resetPwModal.open} onClose={() => setResetPwModal({ ...resetPwModal, open: false, password: null })}
+        title={`Contraseña reseteada — ${resetPwModal.memberName}`} size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">La contraseña ha sido generada. Compártela con el socio. No se volverá a mostrar.</p>
+          <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl border border-gray-200">
+            <code className="flex-1 text-lg font-mono font-bold text-gray-900 tracking-widest">{resetPwModal.password}</code>
+            <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(resetPwModal.password ?? ''); toast.success('Copiado') }}>
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+          <Button className="w-full" onClick={() => setResetPwModal({ ...resetPwModal, open: false, password: null })}>Entendido</Button>
         </div>
       </Modal>
     </div>

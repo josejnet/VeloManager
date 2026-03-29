@@ -12,7 +12,7 @@ import { fmtCurrency, fmtDate } from '@/lib/utils'
 import {
   TrendingUp, TrendingDown, Plus, FileText, Check,
   Tag, Zap, Receipt, Package, User, Wrench, RotateCcw,
-  Wallet, AlertCircle, Upload,
+  Wallet, AlertCircle, Upload, Pencil,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -65,6 +65,12 @@ function BankLedger({ clubId }: { clubId: string }) {
   const [categories, setCategories] = useState<{ income: any[]; expense: any[] }>({ income: [], expense: [] })
   const [form, setForm] = useState({ type: 'INCOME', amount: '', description: '', date: new Date().toISOString().slice(0, 10), categoryId: '' })
   const [catForm, setCatForm] = useState({ name: '', type: 'INCOME', color: '#10b981' })
+  const [editCatModal, setEditCatModal] = useState<{ open: boolean; movementId: string; currentCategoryId: string; type: string } | null>(null)
+  const [editCatValue, setEditCatValue] = useState('')
+  const [savingCat, setSavingCat] = useState(false)
+  const [markInvoiceModal, setMarkInvoiceModal] = useState<{ open: boolean; movementId: string; description: string } | null>(null)
+  const [invoiceSupplier, setInvoiceSupplier] = useState('')
+  const [markingInvoice, setMarkingInvoice] = useState(false)
 
   const loadLedger = useCallback(async () => {
     let url = `/api/clubs/${clubId}/accounting/bank?page=${page}`
@@ -111,14 +117,41 @@ function BankLedger({ clubId }: { clubId: string }) {
     else { const d = await res.json(); toast.error(d.error ?? 'Error') }
   }
 
+  const saveMovementCategory = async () => {
+    if (!editCatModal) return
+    setSavingCat(true)
+    const res = await fetch(`/api/clubs/${clubId}/accounting/movements/${editCatModal.movementId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'set_category', categoryId: editCatValue || null }),
+    })
+    setSavingCat(false)
+    if (res.ok) { toast.success('Categoría actualizada'); setEditCatModal(null); loadLedger() }
+    else { const d = await res.json(); toast.error(d.error ?? 'Error') }
+  }
+
+  const saveMarkAsInvoice = async () => {
+    if (!markInvoiceModal) return
+    setMarkingInvoice(true)
+    const res = await fetch(`/api/clubs/${clubId}/accounting/movements/${markInvoiceModal.movementId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'mark_invoice', supplier: invoiceSupplier || undefined }),
+    })
+    setMarkingInvoice(false)
+    if (res.ok) { toast.success('Movimiento marcado como factura'); setMarkInvoiceModal(null); loadLedger() }
+    else { const d = await res.json(); toast.error(d.error ?? 'Error') }
+  }
+
   const catOptions = [
     { value: '', label: 'Sin categoría' },
     ...(form.type === 'INCOME' ? categories.income : categories.expense).map((c: any) => ({ value: c.id, label: c.name })),
   ]
 
   const balance = data?.bankAccount?.balance ?? 0
-  const totalIncome = data?.bankAccount?.totalIncome ?? 0
-  const totalExpense = data?.bankAccount?.totalExpense ?? 0
+  const yearIncome = data?.bankAccount?.yearIncome ?? 0
+  const yearExpense = data?.bankAccount?.yearExpense ?? 0
+  const currentYear = data?.bankAccount?.currentYear ?? new Date().getFullYear()
 
   return (
     <>
@@ -130,12 +163,12 @@ function BankLedger({ clubId }: { clubId: string }) {
           <p className="text-xs text-gray-400 mt-1">Calculado del libro de cuentas</p>
         </div>
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
-          <p className="text-xs text-gray-400 mb-1">Total ingresos</p>
-          <p className="text-2xl font-bold text-green-600">{fmtCurrency(totalIncome)}</p>
+          <p className="text-xs text-gray-400 mb-1">Ingresos {currentYear}</p>
+          <p className="text-2xl font-bold text-green-600">{fmtCurrency(yearIncome)}</p>
         </div>
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
-          <p className="text-xs text-gray-400 mb-1">Total gastos</p>
-          <p className="text-2xl font-bold text-red-500">{fmtCurrency(totalExpense)}</p>
+          <p className="text-xs text-gray-400 mb-1">Gastos {currentYear}</p>
+          <p className="text-2xl font-bold text-red-500">{fmtCurrency(yearExpense)}</p>
         </div>
       </div>
 
@@ -175,11 +208,14 @@ function BankLedger({ clubId }: { clubId: string }) {
                     <th className="text-left py-2.5 font-medium">Descripción</th>
                     <th className="text-left py-2.5 font-medium">Categoría</th>
                     <th className="text-right py-2.5 font-medium">Importe</th>
+                    <th className="text-right py-2.5 font-medium"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {data.ledger?.data?.map((mv: any) => {
                     const src = SOURCE_META[mv.source] ?? SOURCE_META.MANUAL
+                    const canEdit = true
+                    const canMarkInvoice = mv.type === 'EXPENSE' && !['FEE', 'EVENT', 'ORDER', 'INVOICE'].includes(mv.source)
                     return (
                       <tr key={mv.id} className="hover:bg-gray-50">
                         <td className="py-3 text-gray-500 whitespace-nowrap">{fmtDate(mv.date)}</td>
@@ -198,15 +234,34 @@ function BankLedger({ clubId }: { clubId: string }) {
                             <span className="text-gray-900">{mv.description}</span>
                           </div>
                         </td>
-                        <td className="py-3 text-gray-500 text-xs">{mv.category?.name ?? '—'}</td>
+                        <td className="py-3 text-gray-500 text-xs">
+                          <button
+                            onClick={() => { setEditCatModal({ open: true, movementId: mv.id, currentCategoryId: mv.category?.id ?? '', type: mv.type }); setEditCatValue(mv.category?.id ?? '') }}
+                            className="inline-flex items-center gap-1 hover:text-primary transition-colors"
+                          >
+                            {mv.category?.name ?? <span className="text-gray-300">Sin categoría</span>}
+                            <Pencil className="h-3 w-3 opacity-50" />
+                          </button>
+                        </td>
                         <td className={`py-3 text-right font-semibold ${mv.type === 'INCOME' ? 'text-green-600' : 'text-red-500'}`}>
                           {mv.type === 'INCOME' ? '+' : '-'}{fmtCurrency(mv.amount)}
+                        </td>
+                        <td className="py-3 text-right">
+                          {canMarkInvoice && (
+                            <button
+                              title="Marcar como factura"
+                              onClick={() => { setMarkInvoiceModal({ open: true, movementId: mv.id, description: mv.description }); setInvoiceSupplier('') }}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            >
+                              <Receipt className="h-3 w-3" /> Factura
+                            </button>
+                          )}
                         </td>
                       </tr>
                     )
                   })}
                   {data.ledger?.data?.length === 0 && (
-                    <tr><td colSpan={5} className="py-8 text-center text-sm text-gray-400">Sin movimientos</td></tr>
+                    <tr><td colSpan={6} className="py-8 text-center text-sm text-gray-400">Sin movimientos</td></tr>
                   )}
                 </tbody>
               </table>
@@ -246,6 +301,53 @@ function BankLedger({ clubId }: { clubId: string }) {
 
       {/* Import movements modal */}
       <ImportMovementsModal open={importModal} onClose={() => setImportModal(false)} clubId={clubId} onSuccess={() => { setImportModal(false); loadLedger() }} />
+
+      {/* Edit category on movement */}
+      {editCatModal && (
+        <Modal open={editCatModal.open} onClose={() => setEditCatModal(null)} title="Editar categoría del movimiento" size="sm">
+          <div className="space-y-4">
+            <Select
+              label="Categoría"
+              value={editCatValue}
+              onChange={(e) => setEditCatValue(e.target.value)}
+              options={[
+                { value: '', label: 'Sin categoría' },
+                ...(editCatModal.type === 'INCOME' ? categories.income : categories.expense).map((c: any) => ({ value: c.id, label: c.name })),
+              ]}
+            />
+            <div className="flex gap-2 pt-2">
+              <Button className="flex-1" disabled={savingCat} onClick={saveMovementCategory}>
+                {savingCat ? 'Guardando...' : 'Guardar'}
+              </Button>
+              <Button variant="outline" className="flex-1" onClick={() => setEditCatModal(null)}>Cancelar</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Mark movement as invoice */}
+      {markInvoiceModal && (
+        <Modal open={markInvoiceModal.open} onClose={() => setMarkInvoiceModal(null)} title="Marcar como factura" size="sm">
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Este gasto se convertirá en una factura aprobada visible en la pestaña Facturas.
+            </p>
+            <Input
+              label="Proveedor"
+              placeholder={markInvoiceModal.description}
+              value={invoiceSupplier}
+              onChange={(e) => setInvoiceSupplier(e.target.value)}
+              hint="Deja vacío para usar la descripción del movimiento"
+            />
+            <div className="flex gap-2 pt-2">
+              <Button className="flex-1" variant="primary" disabled={markingInvoice} onClick={saveMarkAsInvoice}>
+                {markingInvoice ? 'Procesando...' : 'Confirmar'}
+              </Button>
+              <Button variant="outline" className="flex-1" onClick={() => setMarkInvoiceModal(null)}>Cancelar</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Categories management modal */}
       <Modal open={catModal} onClose={() => setCatModal(false)} title="Categorías de movimientos" size="sm">

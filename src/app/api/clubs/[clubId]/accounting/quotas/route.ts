@@ -12,6 +12,7 @@ const CreateQuotaSchema = z.object({
   year: z.number().int().min(2000).max(2100),
   amount: z.number().positive(),
   dueDate: z.string().optional(),  // ISO date string
+  markPaid: z.boolean().optional(), // if true, mark as paid immediately and create BankMovement
 })
 
 const PayQuotaSchema = z.object({
@@ -80,6 +81,65 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
     include: { user: { select: { name: true } } },
   })
   if (!membership) return err('Miembro no encontrado en este club', 404)
+
+  // Auto-create bank account if needed (idempotent)
+  await prisma.bankAccount.upsert({
+    where: { clubId: params.clubId },
+    create: { clubId: params.clubId },
+    update: {},
+  })
+
+  if (parsed.data.markPaid) {
+    // Create quota + BankMovement atomically, already marked as paid
+    const now = new Date()
+    const [quota] = await prisma.$transaction([
+      prisma.memberQuota.create({
+        data: {
+          membershipId: parsed.data.membershipId,
+          clubId: params.clubId,
+          year: parsed.data.year,
+          amount: parsed.data.amount,
+          dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : undefined,
+          status: 'PAID',
+          paidAt: now,
+        },
+      }),
+    ])
+
+    // Create BankMovement (sourceId must reference the quota id — do separately)
+    await prisma.bankMovement.create({
+      data: {
+        clubId: params.clubId,
+        type: 'INCOME',
+        amount: parsed.data.amount,
+        description: `Cuota ${parsed.data.year} — ${membership.user.name}`,
+        source: 'FEE',
+        sourceId: quota.id,
+        date: now,
+      },
+    })
+
+    await writeAudit({
+      clubId: params.clubId,
+      userId: access.userId,
+      action: AUDIT.QUOTA_PAID,
+      entity: 'MemberQuota',
+      entityId: quota.id,
+      details: { member: membership.user.name, year: parsed.data.year, amount: parsed.data.amount, autoPaid: true },
+    })
+
+    await prisma.notification.create({
+      data: {
+        userId: membership.userId,
+        clubId: params.clubId,
+        title: `Cuota ${parsed.data.year} registrada`,
+        message: `Tu cuota anual ${parsed.data.year} de ${parsed.data.amount.toFixed(2)}€ ha sido registrada como pagada.`,
+        link: '/socio/quotas',
+      },
+    })
+
+    return ok(quota, 201)
+  }
 
   const quota = await prisma.memberQuota.create({
     data: {
