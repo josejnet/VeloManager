@@ -1,11 +1,12 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { Header } from '@/components/layout/Header'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { THEMES, getThemeVars, themeVarsToStyle } from '@/lib/themes'
+import { Download, Upload, Copy, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 type Visibility = 'PUBLIC' | 'PRIVATE' | 'HIDDEN'
@@ -32,6 +33,16 @@ export default function SettingsPage() {
   })
   const [loading, setLoading] = useState(false)
   const [accessLoading, setAccessLoading] = useState(false)
+
+  // CSV import
+  const [csvFile, setCsvFile] = useState<File | null>(null)
+  const [csvImporting, setCsvImporting] = useState(false)
+  const csvFileRef = useRef<HTMLInputElement>(null)
+
+  // Password generator
+  const [passwordCount, setPasswordCount] = useState(10)
+  const [generatedPasswords, setGeneratedPasswords] = useState<string[]>([])
+  const [passwordsCopied, setPasswordsCopied] = useState(false)
 
   useEffect(() => {
     if (!session?.user) return
@@ -60,6 +71,57 @@ export default function SettingsPage() {
     if (res.ok) toast.success('Configuración guardada')
     else { const d = await res.json(); toast.error(d.error ?? 'Error') }
     setLoading(false)
+  }
+
+  const downloadCsvTemplate = async () => {
+    const res = await fetch(`/api/clubs/${clubId}/member-profiles/template?format=csv`)
+    if (!res.ok) { toast.error('Error al descargar la plantilla'); return }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'plantilla_socios.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleCsvImport = async () => {
+    if (!csvFile) return
+    setCsvImporting(true)
+    const formData = new FormData()
+    formData.append('file', csvFile)
+    const res = await fetch(`/api/clubs/${clubId}/member-profiles/import`, {
+      method: 'POST',
+      body: formData,
+    })
+    setCsvImporting(false)
+    if (res.ok) {
+      const d = await res.json()
+      const result = d.data ?? d
+      toast.success(`Importados: ${result.imported}, omitidos: ${result.skipped}, errores: ${result.errors?.length ?? 0}`)
+      setCsvFile(null)
+      if (csvFileRef.current) csvFileRef.current.value = ''
+    } else {
+      const d = await res.json()
+      toast.error(d.error ?? 'Error al importar')
+    }
+  }
+
+  const generatePasswords = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+    const count = Math.min(Math.max(1, passwordCount), 200)
+    const passwords = Array.from({ length: count }, () =>
+      Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+    )
+    setGeneratedPasswords(passwords)
+    setPasswordsCopied(false)
+  }
+
+  const copyPasswords = () => {
+    navigator.clipboard.writeText(generatedPasswords.join('\n'))
+    setPasswordsCopied(true)
+    toast.success('Contraseñas copiadas')
+    setTimeout(() => setPasswordsCopied(false), 2000)
   }
 
   const saveAccess = async () => {
@@ -220,6 +282,89 @@ export default function SettingsPage() {
 
           <div className="flex justify-end pt-4">
             <Button onClick={saveAccess} loading={accessLoading}>Guardar configuración de acceso</Button>
+          </div>
+        </Card>
+
+        {/* Socios tools */}
+        <Card>
+          <CardHeader><CardTitle>Socios</CardTitle></CardHeader>
+          <div className="space-y-6">
+
+            {/* CSV import */}
+            <div>
+              <p className="text-sm font-semibold text-gray-800 mb-1">Importar socios desde CSV</p>
+              <p className="text-xs text-gray-500 mb-3">
+                Descarga la plantilla CSV, rellénala y súbela para importar múltiples socios a la vez.
+              </p>
+              <Button variant="outline" size="sm" onClick={downloadCsvTemplate} disabled={!clubId}>
+                <Download className="h-4 w-4" /> Descargar plantilla CSV
+              </Button>
+
+              <div className="mt-4">
+                <p className="text-xs font-medium text-gray-600 mb-2">Subir archivo CSV</p>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <label className="cursor-pointer">
+                    <input
+                      ref={csvFileRef}
+                      type="file"
+                      accept=".csv,.xlsx,.xls"
+                      className="hidden"
+                      onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
+                    />
+                    <span className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors cursor-pointer">
+                      <Upload className="h-4 w-4" /> Seleccionar archivo
+                    </span>
+                  </label>
+                  {csvFile && (
+                    <span className="text-sm text-gray-600">{csvFile.name}</span>
+                  )}
+                </div>
+                {csvFile && (
+                  <div className="mt-3">
+                    <Button onClick={handleCsvImport} loading={csvImporting} disabled={csvImporting}>
+                      <Upload className="h-4 w-4" /> {csvImporting ? 'Importando...' : 'Importar socios'}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-sm font-semibold text-gray-800 mb-1">Generador de contraseñas</p>
+              <p className="text-xs text-gray-500 mb-3">
+                Genera contraseñas aleatorias de 8 caracteres alfanuméricos para asignar a los socios.
+              </p>
+              <div className="flex items-end gap-3 flex-wrap">
+                <div className="w-28">
+                  <Input
+                    label="Cantidad"
+                    type="number"
+                    min={1}
+                    max={200}
+                    value={passwordCount}
+                    onChange={(e) => setPasswordCount(parseInt(e.target.value) || 1)}
+                  />
+                </div>
+                <Button onClick={generatePasswords}>Generar contraseñas</Button>
+                {generatedPasswords.length > 0 && (
+                  <Button variant="outline" onClick={copyPasswords}>
+                    {passwordsCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    {passwordsCopied ? 'Copiadas' : 'Copiar todo'}
+                  </Button>
+                )}
+              </div>
+              {generatedPasswords.length > 0 && (
+                <div className="mt-3 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50">
+                  <div className="grid grid-cols-4 gap-1">
+                    {generatedPasswords.map((p, i) => (
+                      <span key={i} className="font-mono text-xs text-gray-700 bg-white px-2 py-1 rounded border border-gray-100">
+                        {p}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </Card>
 
