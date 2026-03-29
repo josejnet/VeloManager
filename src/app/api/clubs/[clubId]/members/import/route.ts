@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
+import { hash } from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { requireClubAccess } from '@/lib/authz'
 import { ok, err } from '@/lib/utils'
@@ -7,6 +8,7 @@ import { ok, err } from '@/lib/utils'
 const MemberRowSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1).max(100),
+  password: z.string().min(1).optional(),
   province: z.string().optional(),
   locality: z.string().optional(),
 })
@@ -42,18 +44,21 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
   for (const row of members) {
     try {
       // Upsert the user by email
+      const hashedPassword = row.password ? await hash(row.password, 10) : undefined
       const user = await prisma.user.upsert({
         where: { email: row.email.toLowerCase() },
         create: {
           email: row.email.toLowerCase(),
           name: row.name,
+          password: hashedPassword ?? null,
           province: row.province ?? null,
           locality: row.locality ?? null,
         },
         update: {
-          // Only update location fields if provided; do not overwrite name to preserve existing users
+          // Only update location/password fields; do not overwrite name to preserve existing users
           ...(row.province !== undefined && { province: row.province }),
           ...(row.locality !== undefined && { locality: row.locality }),
+          ...(hashedPassword !== undefined && { password: hashedPassword }),
         },
         select: { id: true },
       })

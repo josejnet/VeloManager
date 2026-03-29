@@ -552,7 +552,7 @@ function QuotasPanel({ clubId }: { clubId: string }) {
     setPayingId(quotaId)
     const res = await fetch(`/api/clubs/${clubId}/accounting/quotas`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ quotaId }),
+      body: JSON.stringify({ action: 'mark_paid', quotaId }),
     })
     setPayingId(null)
     if (res.ok) { toast.success('Cuota pagada — ingreso registrado en el libro de bancos'); load() }

@@ -13,14 +13,14 @@ export async function GET(req: NextRequest, { params }: { params: { clubId: stri
 
   const { page, pageSize, skip, take } = getPaginationParams(req.nextUrl.searchParams)
   const status = (req.nextUrl.searchParams.get('status') ?? 'APPROVED') as MembershipStatus
-  const sortParam = req.nextUrl.searchParams.get('sort') ?? 'joinedAt'
-  const orderParam = (req.nextUrl.searchParams.get('order') ?? 'desc') as 'asc' | 'desc'
+  const sortParam = req.nextUrl.searchParams.get('sort') ?? 'name'
+  const orderParam = (req.nextUrl.searchParams.get('order') ?? 'asc') as 'asc' | 'desc'
 
-  const ALLOWED_SORTS = ['joinedAt', 'clubRole', 'createdAt']
-  const sort = ALLOWED_SORTS.includes(sortParam) ? sortParam : 'joinedAt'
+  const ALLOWED_SORTS = ['name', 'email', 'joinedAt', 'clubRole', 'createdAt']
+  const sort = ALLOWED_SORTS.includes(sortParam) ? sortParam : 'name'
   const orderBy: Record<string, 'asc' | 'desc'> | { user: Record<string, 'asc' | 'desc'> } =
-    sortParam === 'name'  ? { user: { name: orderParam } } :
-    sortParam === 'email' ? { user: { email: orderParam } } :
+    sort === 'name'  ? { user: { name: orderParam } } :
+    sort === 'email' ? { user: { email: orderParam } } :
     { [sort]: orderParam }
 
   const where = { clubId: params.clubId, status }
