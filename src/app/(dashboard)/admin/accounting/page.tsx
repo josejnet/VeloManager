@@ -419,6 +419,7 @@ function QuotasPanel({ clubId }: { clubId: string }) {
   const [statusFilter, setStatusFilter] = useState('')
   const [yearFilter, setYearFilter] = useState('')
   const [payingId, setPayingId] = useState<string | null>(null)
+  const [revertingId, setRevertingId] = useState<string | null>(null)
   const [createModal, setCreateModal] = useState(false)
   const [bulkModal, setBulkModal] = useState(false)
   const [members, setMembers] = useState<any[]>([])
@@ -440,6 +441,16 @@ function QuotasPanel({ clubId }: { clubId: string }) {
       .then((r) => r.json())
       .then((d) => setMembers(d.data ?? []))
   }, [clubId])
+
+  const revertQuota = async (quotaId: string) => {
+    setRevertingId(quotaId)
+    const res = await fetch(`/api/clubs/${clubId}/accounting/quotas?quotaId=${quotaId}`, {
+      method: 'DELETE',
+    })
+    setRevertingId(null)
+    if (res.ok) { toast.success('Cuota revertida — movimiento de anulación registrado'); load() }
+    else { const d = await res.json(); toast.error(d.error ?? 'Error') }
+  }
 
   const markPaid = async (quotaId: string) => {
     setPayingId(quotaId)
@@ -530,11 +541,18 @@ function QuotasPanel({ clubId }: { clubId: string }) {
                   <td className="py-3 font-semibold">{fmtCurrency(q.amount)}</td>
                   <td className="py-3"><QuotaStatusBadge status={q.status} /></td>
                   <td className="py-3 text-right">
-                    {q.status !== 'PAID' && (
-                      <Button size="sm" disabled={payingId === q.id} onClick={() => markPaid(q.id)}>
-                        <Check className="h-3 w-3" /> {payingId === q.id ? 'Procesando...' : 'Marcar pagada'}
-                      </Button>
-                    )}
+                    <div className="flex justify-end gap-1">
+                      {q.status !== 'PAID' && (
+                        <Button size="sm" disabled={payingId === q.id} onClick={() => markPaid(q.id)}>
+                          <Check className="h-3 w-3" /> {payingId === q.id ? 'Procesando...' : 'Marcar pagada'}
+                        </Button>
+                      )}
+                      {q.status === 'PAID' && (
+                        <Button size="sm" variant="outline" disabled={revertingId === q.id} onClick={() => revertQuota(q.id)}>
+                          <RotateCcw className="h-3 w-3" /> {revertingId === q.id ? 'Revirtiendo...' : 'Revertir'}
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

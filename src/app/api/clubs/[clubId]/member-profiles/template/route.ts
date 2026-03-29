@@ -3,12 +3,15 @@ import * as XLSX from 'xlsx'
 import { requireClubAccess } from '@/lib/authz'
 
 // GET /api/clubs/[clubId]/member-profiles/template
+// ?format=csv returns a CSV file; default is .xlsx
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { clubId: string } }
 ) {
   const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
+
+  const format = req.nextUrl.searchParams.get('format')
 
   const headers = [
     'Email',
@@ -88,6 +91,17 @@ export async function GET(
     { wch: 12 }, // FechaAlta
     { wch: 40 }, // Notas
   ]
+
+  if (format === 'csv') {
+    const csvContent = XLSX.utils.sheet_to_csv(worksheet)
+    return new Response(csvContent, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="plantilla_socios.csv"',
+      },
+    })
+  }
 
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Socios')
