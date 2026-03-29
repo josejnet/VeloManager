@@ -784,13 +784,29 @@ function generatePassword(): string {
 }
 
 function parseCsv(text: string): CsvRow[] {
-  const lines = text.trim().split('\n')
+  // Normalise line endings
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim().split('\n')
   if (lines.length < 2) return []
-  // Skip header row
-  return lines.slice(1).map((line) => {
-    const parts = line.split(',').map((p) => p.trim().replace(/^"|"$/g, ''))
-    return { nombre: parts[0] ?? '', email: parts[1] ?? '', password: parts[2] ?? '' }
-  }).filter((r) => r.nombre || r.email)
+  // Auto-detect delimiter: semicolon (Excel ES/EU) or comma
+  const header = lines[0]
+  const delimiter = header.includes(';') ? ';' : ','
+  const splitLine = (line: string) => line.split(delimiter).map((p) => p.trim().replace(/^"|"$/g, ''))
+  const headers = splitLine(header).map((h) => h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
+  // Map header positions flexibly
+  const idx = (keys: string[]) => keys.reduce((found, k) => found >= 0 ? found : headers.indexOf(k), -1)
+  const nombreIdx   = idx(['nombre', 'name', 'nom'])
+  const emailIdx    = idx(['email', 'correo', 'e-mail'])
+  const passwordIdx = idx(['password', 'contrasena', 'contraseña', 'pwd', 'clave'])
+  return lines.slice(1)
+    .map((line) => {
+      const parts = splitLine(line)
+      return {
+        nombre:   nombreIdx   >= 0 ? (parts[nombreIdx]   ?? '') : (parts[0] ?? ''),
+        email:    emailIdx    >= 0 ? (parts[emailIdx]    ?? '') : (parts[1] ?? ''),
+        password: passwordIdx >= 0 ? (parts[passwordIdx] ?? '') : (parts[2] ?? ''),
+      }
+    })
+    .filter((r) => r.nombre || r.email)
 }
 
 function ImportTab({ clubId }: { clubId: string }) {

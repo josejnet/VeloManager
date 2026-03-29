@@ -274,24 +274,38 @@ export async function PATCH(req: NextRequest, { params }: { params: { clubId: st
 
     case 'mark_pending': {
       if (quota.status === 'PENDING') return err('La cuota ya está pendiente', 409)
-      // Refuse if a BankMovement exists — reverting would break accounting consistency
+      // If a BankMovement exists, create an ADJUSTMENT entry to cancel it
       const movement = await prisma.bankMovement.findUnique({
         where: { source_sourceId: { source: 'FEE', sourceId: quota.id } },
       })
-      if (movement) return err('No se puede revertir: existe un movimiento contable asociado. Elimínalo desde Contabilidad primero.', 409)
-      const updatedQuota = await prisma.memberQuota.update({
-        where: { id: quota.id },
-        data: { status: 'PENDING', paidAt: null },
+      await prisma.$transaction(async (tx) => {
+        await tx.memberQuota.update({
+          where: { id: quota.id },
+          data: { status: 'PENDING', paidAt: null },
+        })
+        if (movement) {
+          await tx.bankMovement.create({
+            data: {
+              clubId: params.clubId,
+              type: 'EXPENSE',
+              amount: movement.amount,
+              description: `Anulación cuota ${quota.year} — ${quota.membership.user.name}`,
+              source: 'ADJUSTMENT',
+              sourceId: movement.id,
+              date: new Date(),
+            },
+          })
+        }
       })
       await writeAudit({
         clubId: params.clubId,
         userId: access.userId,
-        action: AUDIT.QUOTA_CREATED,
+        action: AUDIT.QUOTA_REVERTED,
         entity: 'MemberQuota',
         entityId: quota.id,
-        details: { member: quota.membership.user.name, year: quota.year, reverted: true },
+        details: { member: quota.membership.user.name, year: quota.year, adjustmentCreated: !!movement },
       })
-      return ok({ quota: updatedQuota })
+      return ok({ reverted: true })
     }
 
     case 'mark_overdue': {
