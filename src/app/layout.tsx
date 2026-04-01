@@ -10,6 +10,11 @@ const inter = Inter({ subsets: ['latin'], display: 'swap', preload: false })
 export const metadata: Metadata = {
   title: 'Clube — Gestión de Clubes Deportivos',
   description: 'Plataforma SaaS para la gestión integral de clubes deportivos',
+  icons: {
+    icon: '/icon.svg',
+    shortcut: '/icon.svg',
+    apple: '/icon.svg',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Background circle -->
+  <rect width="32" height="32" rx="8" fill="#2563eb"/>
+  <!-- Bicycle wheel left -->
+  <circle cx="10" cy="21" r="5" stroke="white" stroke-width="1.8" fill="none"/>
+  <!-- Bicycle wheel right -->
+  <circle cx="22" cy="21" r="5" stroke="white" stroke-width="1.8" fill="none"/>
+  <!-- Frame: chainstay bottom -->
+  <line x1="10" y1="21" x2="16" y2="21" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+  <!-- Frame: seat tube + top tube -->
+  <polyline points="13,21 15,14 19,14" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Frame: down tube -->
+  <line x1="19" y1="14" x2="22" y2="21" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+  <!-- Frame: seat stay -->
+  <line x1="15" y1="14" x2="22" y2="21" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+  <!-- Handlebar -->
+  <polyline points="18,14 20,12 22,12" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Saddle -->
+  <line x1="12" y1="13.5" x2="16" y2="13.5" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+  <!-- Hub dots -->
+  <circle cx="10" cy="21" r="1.2" fill="white"/>
+  <circle cx="22" cy="21" r="1.2" fill="white"/>
+</svg>
