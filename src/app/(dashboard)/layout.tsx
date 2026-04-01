@@ -90,7 +90,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
     isAdminViewingAsSocio,
   }
 
-  const themeVars = getThemeVars(club?.colorTheme ?? 'blue')
+  const themeVars = getThemeVars(
+    club?.colorTheme ?? 'blue',
+    club?.primaryColor ?? null,
+    club?.secondaryColor ?? null,
+  )
 
   return (
     <DashboardProvider value={contextValue}>

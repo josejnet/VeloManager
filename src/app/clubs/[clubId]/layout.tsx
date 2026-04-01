@@ -82,8 +82,6 @@ export default async function ClubLayout({ children, params }: ClubLayoutProps) 
 
   // The base path for nav links in this route group (eliminates cookie dependency)
   const baseHref = `/clubs/${clubId}`
-  const themeVars = getThemeVars(club?.colorTheme ?? 'blue')
-
   const clubData: ClubData | null = club ? {
     id: club.id,
     name: club.name,
@@ -91,9 +89,15 @@ export default async function ClubLayout({ children, params }: ClubLayoutProps) 
     sport: club.sport,
     logoUrl: club.logoUrl ?? null,
     colorTheme: club.colorTheme,
-    primaryColor: (club as any).primaryColor ?? null,
-    secondaryColor: (club as any).secondaryColor ?? null,
+    primaryColor: club.primaryColor ?? null,
+    secondaryColor: club.secondaryColor ?? null,
   } : null
+
+  const themeVars = getThemeVars(
+    club?.colorTheme ?? 'blue',
+    club?.primaryColor ?? null,
+    club?.secondaryColor ?? null,
+  )
 
   const layout = (
     <DashboardProvider value={contextValue}>

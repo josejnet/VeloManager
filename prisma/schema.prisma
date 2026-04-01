@@ -279,8 +279,10 @@ model Club {
   name        String
   slogan      String?
   sport       String   // from Sports master table
-  colorTheme  String   @default("blue")
-  logoUrl     String?
+  colorTheme    String   @default("blue")
+  primaryColor  String?  // custom hex, e.g. "#e63946" — overrides colorTheme palette
+  secondaryColor String? // custom hex for secondary/accent
+  logoUrl       String?
   active      Boolean  @default(true)
   // Location metadata (for announcement segmentation)
   province    String?

@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { THEMES, getThemeVars, themeVarsToStyle } from '@/lib/themes'
-import { Download, Upload, Copy, Check } from 'lucide-react'
+import { Download, Upload, Copy, Check, ImageIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 type Visibility = 'PUBLIC' | 'PRIVATE' | 'HIDDEN'
@@ -15,7 +15,7 @@ type JoinPolicy = 'OPEN' | 'REQUEST' | 'INVITE_ONLY'
 export default function SettingsPage() {
   const { data: session } = useSession()
   const [clubId, setClubId] = useState('')
-  const [form, setForm] = useState({ name: '', slogan: '', sport: '', colorTheme: 'blue', logoUrl: '' })
+  const [form, setForm] = useState({ name: '', slogan: '', sport: '', colorTheme: 'blue', logoUrl: '', primaryColor: '', secondaryColor: '' })
   const [access, setAccess] = useState<{
     visibility: Visibility
     joinPolicy: JoinPolicy
@@ -34,6 +34,11 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false)
   const [accessLoading, setAccessLoading] = useState(false)
 
+  // Logo upload
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const logoFileRef = useRef<HTMLInputElement>(null)
+
   // CSV import
   const [csvFile, setCsvFile] = useState<File | null>(null)
   const [csvImporting, setCsvImporting] = useState(false)
@@ -50,7 +55,7 @@ export default function SettingsPage() {
       if (d.data?.[0]) {
         const club = d.data[0]
         setClubId(club.id)
-        setForm({ name: club.name ?? '', slogan: club.slogan ?? '', sport: club.sport ?? '', colorTheme: club.colorTheme ?? 'blue', logoUrl: club.logoUrl ?? '' })
+        setForm({ name: club.name ?? '', slogan: club.slogan ?? '', sport: club.sport ?? '', colorTheme: club.colorTheme ?? 'blue', logoUrl: club.logoUrl ?? '', primaryColor: club.primaryColor ?? '', secondaryColor: club.secondaryColor ?? '' })
         setAccess({
           visibility: club.visibility ?? 'PUBLIC',
           joinPolicy: club.joinPolicy ?? 'REQUEST',
@@ -65,12 +70,37 @@ export default function SettingsPage() {
 
   const save = async () => {
     setLoading(true)
+    const payload = {
+      ...form,
+      primaryColor: /^#[0-9a-fA-F]{6}$/.test(form.primaryColor) ? form.primaryColor : null,
+      secondaryColor: /^#[0-9a-fA-F]{6}$/.test(form.secondaryColor) ? form.secondaryColor : null,
+    }
     const res = await fetch(`/api/clubs/${clubId}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     })
     if (res.ok) toast.success('Configuración guardada')
     else { const d = await res.json(); toast.error(d.error ?? 'Error') }
     setLoading(false)
+  }
+
+  const uploadLogo = async () => {
+    if (!logoFile) return
+    setLogoUploading(true)
+    const fd = new FormData()
+    fd.append('file', logoFile)
+    const res = await fetch(`/api/upload/logo?clubId=${clubId}`, { method: 'POST', body: fd })
+    const data = await res.json()
+    if (res.ok) {
+      setForm((f) => ({ ...f, logoUrl: data.data.url }))
+      setLogoFile(null)
+      if (logoFileRef.current) logoFileRef.current.value = ''
+      toast.success('Logo subido correctamente')
+    } else if (res.status === 501) {
+      toast.error('Cloudinary no configurado. Introduce la URL del logo manualmente.')
+    } else {
+      toast.error(data.error ?? 'Error al subir el logo')
+    }
+    setLogoUploading(false)
   }
 
   const downloadCsvTemplate = async () => {
@@ -148,8 +178,10 @@ export default function SettingsPage() {
     { value: 'INVITE_ONLY', label: 'Solo por invitación', desc: 'Únicamente usuarios con una invitación válida pueden unirse.' },
   ]
 
+  const liveThemeStyle = themeVarsToStyle(getThemeVars(form.colorTheme, form.primaryColor || null, form.secondaryColor || null))
+
   return (
-    <div className="flex flex-col flex-1 overflow-auto" style={themeVarsToStyle(getThemeVars(form.colorTheme))}>
+    <div className="flex flex-col flex-1 overflow-auto" style={liveThemeStyle}>
       <Header title="Configuración del Club" clubId={clubId} />
       <main className="flex-1 p-6 space-y-6">
 
@@ -160,9 +192,50 @@ export default function SettingsPage() {
             <Input label="Nombre del club" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <Input label="Slogan / Lema" value={form.slogan} onChange={(e) => setForm({ ...form, slogan: e.target.value })} />
             <Input label="Deporte" value={form.sport} onChange={(e) => setForm({ ...form, sport: e.target.value })} />
-            <div>
-              <Input label="URL del logo" value={form.logoUrl} onChange={(e) => setForm({ ...form, logoUrl: e.target.value })} placeholder="https://..." />
-              <p className="text-xs text-gray-400 mt-1">PNG o JPG · mínimo 200×200 px · máximo 1 MB · fondo transparente recomendado</p>
+            {/* Logo field: file upload + URL manual fallback */}
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Logo del club</label>
+              <div className="flex gap-4 items-start">
+                {/* Preview */}
+                <div className="flex-shrink-0 h-16 w-16 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden">
+                  {form.logoUrl
+                    ? <img src={form.logoUrl} alt="Logo" className="h-full w-full object-contain" />
+                    : <ImageIcon className="h-7 w-7 text-gray-300" />
+                  }
+                </div>
+                <div className="flex-1 space-y-2">
+                  {/* File picker */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <label className="cursor-pointer">
+                      <input
+                        ref={logoFileRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                        className="hidden"
+                        onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
+                      />
+                      <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors cursor-pointer">
+                        <Upload className="h-3.5 w-3.5" /> Subir imagen
+                      </span>
+                    </label>
+                    {logoFile && (
+                      <>
+                        <span className="text-xs text-gray-500 truncate max-w-[160px]">{logoFile.name}</span>
+                        <Button size="sm" onClick={uploadLogo} loading={logoUploading}>
+                          Subir
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  {/* URL manual fallback */}
+                  <Input
+                    value={form.logoUrl}
+                    onChange={(e) => setForm({ ...form, logoUrl: e.target.value })}
+                    placeholder="…o pega aquí una URL externa (https://...)"
+                  />
+                  <p className="text-xs text-gray-400">PNG · JPG · WebP · SVG · máx. 2 MB · fondo transparente recomendado</p>
+                </div>
+              </div>
             </div>
           </div>
           <div className="flex justify-end pt-4">
@@ -186,6 +259,75 @@ export default function SettingsPage() {
               )
             })}
           </div>
+          {/* Custom hex color pickers */}
+          <div className="mt-5 border-t border-gray-100 pt-4">
+            <p className="text-sm font-medium text-gray-700 mb-1">Color personalizado</p>
+            <p className="text-xs text-gray-400 mb-3">
+              Si defines un color primario, tendrá prioridad sobre la paleta seleccionada. Déjalo en blanco para usar la paleta.
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Color primario</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={form.primaryColor || '#3b82f6'}
+                    onChange={(e) => setForm({ ...form, primaryColor: e.target.value })}
+                    className="h-9 w-12 cursor-pointer rounded border border-gray-200 p-0.5"
+                  />
+                  <input
+                    type="text"
+                    value={form.primaryColor}
+                    placeholder="#rrggbb  (vacío = paleta)"
+                    onChange={(e) => setForm({ ...form, primaryColor: e.target.value })}
+                    className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                  />
+                  {form.primaryColor && (
+                    <button
+                      onClick={() => setForm({ ...form, primaryColor: '' })}
+                      className="text-xs text-gray-400 hover:text-red-500 px-1"
+                      title="Limpiar color personalizado"
+                    >✕</button>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Color secundario</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={form.secondaryColor || '#0ea5e9'}
+                    onChange={(e) => setForm({ ...form, secondaryColor: e.target.value })}
+                    className="h-9 w-12 cursor-pointer rounded border border-gray-200 p-0.5"
+                  />
+                  <input
+                    type="text"
+                    value={form.secondaryColor}
+                    placeholder="#rrggbb  (vacío = paleta)"
+                    onChange={(e) => setForm({ ...form, secondaryColor: e.target.value })}
+                    className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                  />
+                  {form.secondaryColor && (
+                    <button
+                      onClick={() => setForm({ ...form, secondaryColor: '' })}
+                      className="text-xs text-gray-400 hover:text-red-500 px-1"
+                      title="Limpiar color personalizado"
+                    >✕</button>
+                  )}
+                </div>
+              </div>
+            </div>
+            {(form.primaryColor || form.secondaryColor) && (
+              <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
+                <div className="flex gap-1.5">
+                  {form.primaryColor && <span className="w-5 h-5 rounded-full border border-gray-200 inline-block" style={{ background: form.primaryColor }} />}
+                  {form.secondaryColor && <span className="w-5 h-5 rounded-full border border-gray-200 inline-block" style={{ background: form.secondaryColor }} />}
+                </div>
+                Preview en vivo activo — los cambios se reflejan en la UI al instante
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end pt-4">
             <Button onClick={save} loading={loading}>Guardar colores</Button>
           </div>
