@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { signOut } from 'next-auth/react'
+import { signOut, useSession } from 'next-auth/react'
 import { cn } from '@/lib/utils'
 import { can } from '@/lib/permissions'
 import type { ClubRole } from '@/lib/permissions'
@@ -109,7 +109,7 @@ export function Sidebar({ role, clubName, clubLogo, baseHref = '', mode = 'socio
             </Link>
           ))}
         </nav>
-        <SignOutButton />
+        <UserFooter isAdmin={false} isSuperAdmin={true} />
       </aside>
     )
   }
@@ -186,14 +186,49 @@ export function Sidebar({ role, clubName, clubLogo, baseHref = '', mode = 'socio
         )}
       </nav>
 
-      <SignOutButton />
+      <UserFooter isAdmin={isAdmin} isSuperAdmin={false} />
     </aside>
   )
 }
 
-function SignOutButton() {
+function UserFooter({ isAdmin, isSuperAdmin }: { isAdmin: boolean; isSuperAdmin: boolean }) {
+  const { data: session } = useSession()
+  const sessionUser = session?.user as { name?: string | null; email?: string | null; image?: string | null } | undefined
+  const displayName = sessionUser?.name?.trim() || sessionUser?.email?.split('@')[0] || 'Usuario'
+  const initials = (() => {
+    const src = sessionUser?.name?.trim() || sessionUser?.email?.split('@')[0] || '?'
+    const parts = src.split(/\s+/).filter(Boolean)
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    return src.slice(0, 2).toUpperCase()
+  })()
+  const avatarImage = sessionUser?.image ?? null
+
+  const roleLabel = isSuperAdmin ? 'Super Admin' : isAdmin ? 'Gestor' : 'Socio'
+  const roleCls = isSuperAdmin
+    ? 'text-red-600 bg-red-50'
+    : isAdmin
+      ? 'text-orange-600 bg-orange-50'
+      : 'text-blue-600 bg-blue-50'
+
   return (
-    <div className="px-3 pb-4 border-t border-gray-100 pt-3">
+    <div className="border-t border-gray-100 px-3 pt-3 pb-4 space-y-2">
+      {/* Identity card */}
+      <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg bg-gray-50">
+        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 overflow-hidden">
+          {avatarImage
+            ? <img src={avatarImage} alt={displayName} className="h-full w-full object-cover" />
+            : <span className="text-[11px] font-bold text-primary leading-none">{initials}</span>
+          }
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold text-gray-900 truncate leading-tight">{displayName}</p>
+          <span className={cn('inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mt-0.5 tracking-wide', roleCls)}>
+            {roleLabel}
+          </span>
+        </div>
+      </div>
+
+      {/* Sign out */}
       <button
         onClick={() => signOut({ callbackUrl: '/login' })}
         className="sidebar-item w-full text-red-500 hover:text-red-600 hover:bg-red-50"
