@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { requireClubAccess } from '@/lib/authz'
 import { writeAudit, AUDIT } from '@/lib/audit'
 import { ok, err, getPaginationParams, buildPaginatedResponse } from '@/lib/utils'
+import { applyRateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -83,6 +84,9 @@ export async function GET(req: NextRequest, { params }: { params: { clubId: stri
 
 // POST /api/clubs/[clubId]/accounting/quotas — assign a quota to a member
 export async function POST(req: NextRequest, { params }: { params: { clubId: string } }) {
+  const limited = applyRateLimit(req)
+  if (limited) return limited
+
   const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
@@ -188,6 +192,9 @@ export async function POST(req: NextRequest, { params }: { params: { clubId: str
 
 // PATCH /api/clubs/[clubId]/accounting/quotas — edit quota status or fields
 export async function PATCH(req: NextRequest, { params }: { params: { clubId: string } }) {
+  const limited = applyRateLimit(req)
+  if (limited) return limited
+
   const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 

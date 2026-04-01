@@ -81,12 +81,14 @@ enum PaymentStatus {
   PENDING
   PAID
   CANCELLED
+  REFUNDED
 }
 
 enum QuotaStatus {
   PENDING
   PAID
   OVERDUE
+  REFUNDED
 }
 
 enum PurchaseWindowStatus {
@@ -295,6 +297,8 @@ model Club {
   // Description shown on public club page
   description  String?
   foundedYear  Int?
+  // Quota configuration
+  quotaGracePeriodDays    Int            @default(7)  // days after dueDate before marking OVERDUE
   // Access control
   visibility              ClubVisibility @default(PUBLIC)
   joinPolicy              JoinPolicy     @default(REQUEST)
@@ -505,6 +509,8 @@ model MemberQuota {
   status       QuotaStatus @default(PENDING)
   dueDate      DateTime?   // specific payment deadline (null = open-ended)
   paidAt       DateTime?
+  refundedAt   DateTime?
+  refundNote   String?
   createdAt    DateTime    @default(now())
 
   // BankMovement is linked via source='FEE', sourceId=quota.id — no direct relation needed
@@ -1070,15 +1076,17 @@ model EventAttendee {
 // Created when a user registers for a paid event.
 // BankMovement linked via source='EVENT', sourceId=eventPayment.id
 model EventPayment {
-  id        String        @id @default(cuid())
-  eventId   String
-  userId    String
-  clubId    String        // denormalized
-  amount    Decimal       @db.Decimal(14, 2)
-  status    PaymentStatus @default(PENDING)
-  paidAt    DateTime?
-  notes     String?
-  createdAt DateTime      @default(now())
+  id         String        @id @default(cuid())
+  eventId    String
+  userId     String
+  clubId     String        // denormalized
+  amount     Decimal       @db.Decimal(14, 2)
+  status     PaymentStatus @default(PENDING)
+  paidAt     DateTime?
+  refundedAt DateTime?
+  refundNote String?
+  notes      String?
+  createdAt  DateTime      @default(now())
 
   event ClubEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
   user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1091,14 +1099,16 @@ model EventPayment {
 // Created when an admin marks an order as paid.
 // BankMovement linked via source='ORDER', sourceId=orderPayment.id
 model OrderPayment {
-  id        String        @id @default(cuid())
-  orderId   String        @unique
-  clubId    String        // denormalized
-  amount    Decimal       @db.Decimal(14, 2)
-  status    PaymentStatus @default(PENDING)
-  paidAt    DateTime?
-  note      String?
-  createdAt DateTime      @default(now())
+  id         String        @id @default(cuid())
+  orderId    String        @unique
+  clubId     String        // denormalized
+  amount     Decimal       @db.Decimal(14, 2)
+  status     PaymentStatus @default(PENDING)
+  paidAt     DateTime?
+  refundedAt DateTime?
+  refundNote String?
+  note       String?
+  createdAt  DateTime      @default(now())
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 

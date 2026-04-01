@@ -16,6 +16,8 @@ export default function SettingsPage() {
   const { data: session } = useSession()
   const [clubId, setClubId] = useState('')
   const [form, setForm] = useState({ name: '', slogan: '', sport: '', colorTheme: 'blue', logoUrl: '', primaryColor: '', secondaryColor: '' })
+  const [quotaSettings, setQuotaSettings] = useState({ quotaGracePeriodDays: 7 })
+  const [quotaLoading, setQuotaLoading] = useState(false)
   const [access, setAccess] = useState<{
     visibility: Visibility
     joinPolicy: JoinPolicy
@@ -64,6 +66,7 @@ export default function SettingsPage() {
           defaultInviteExpiryDays: club.defaultInviteExpiryDays ?? 7,
           defaultInviteMaxUses: club.defaultInviteMaxUses ?? 1,
         })
+        setQuotaSettings({ quotaGracePeriodDays: club.quotaGracePeriodDays ?? 7 })
       }
     })
   }, [session])
@@ -164,6 +167,18 @@ export default function SettingsPage() {
     if (res.ok) toast.success('Configuración de acceso guardada')
     else { const d = await res.json(); toast.error(d.error ?? 'Error') }
     setAccessLoading(false)
+  }
+
+  const saveQuotaSettings = async () => {
+    setQuotaLoading(true)
+    const res = await fetch(`/api/clubs/${clubId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quotaGracePeriodDays: quotaSettings.quotaGracePeriodDays }),
+    })
+    if (res.ok) toast.success('Configuración de cuotas guardada')
+    else { const d = await res.json(); toast.error(d.error ?? 'Error') }
+    setQuotaLoading(false)
   }
 
   const visibilityOptions: { value: Visibility; label: string; desc: string }[] = [
@@ -424,6 +439,33 @@ export default function SettingsPage() {
 
           <div className="flex justify-end pt-4">
             <Button onClick={saveAccess} loading={accessLoading}>Guardar configuración de acceso</Button>
+          </div>
+        </Card>
+
+        {/* Quota settings */}
+        <Card>
+          <CardHeader><CardTitle>Cuotas</CardTitle></CardHeader>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-1">Período de gracia para vencimiento</p>
+              <p className="text-xs text-gray-500 mb-3">
+                Días de margen tras la fecha de vencimiento antes de que una cuota pendiente pase a estado <strong>Vencida</strong>.
+                El cron diario respeta este período antes de marcar el impago.
+              </p>
+              <div className="w-40">
+                <Input
+                  label="Días de gracia"
+                  type="number"
+                  min={0}
+                  max={365}
+                  value={quotaSettings.quotaGracePeriodDays}
+                  onChange={(e) => setQuotaSettings({ ...quotaSettings, quotaGracePeriodDays: parseInt(e.target.value) || 0 })}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end pt-4">
+            <Button onClick={saveQuotaSettings} loading={quotaLoading}>Guardar configuración de cuotas</Button>
           </div>
         </Card>
 

@@ -143,6 +143,21 @@ function BankLedger({ clubId }: { clubId: string }) {
     else { const d = await res.json(); toast.error(d.error ?? 'Error') }
   }
 
+  const downloadCsv = async () => {
+    let url = `/api/clubs/${clubId}/accounting/export?format=csv`
+    if (typeFilter)   url += `&type=${typeFilter}`
+    if (sourceFilter) url += `&source=${sourceFilter}`
+    const res = await fetch(url)
+    if (!res.ok) { toast.error('Error al exportar'); return }
+    const blob = await res.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    a.download = `contabilidad-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(blobUrl)
+  }
+
   const catOptions = [
     { value: '', label: 'Sin categoría' },
     ...(form.type === 'INCOME' ? categories.income : categories.expense).map((c: any) => ({ value: c.id, label: c.name })),
@@ -192,6 +207,7 @@ function BankLedger({ clubId }: { clubId: string }) {
               {Object.entries(SOURCE_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
             <Button size="sm" variant="outline" onClick={() => setCatModal(true)}><Tag className="h-4 w-4" />Categorías</Button>
+            <Button size="sm" variant="outline" onClick={downloadCsv}><Download className="h-4 w-4" />Exportar CSV</Button>
             <Button size="sm" variant="outline" onClick={() => setImportModal(true)}><FileText className="h-4 w-4" />Importar movimientos</Button>
             <Button size="sm" onClick={() => setModal(true)}><Plus className="h-4 w-4" />Nuevo</Button>
           </div>
@@ -527,6 +543,10 @@ function QuotasPanel({ clubId }: { clubId: string }) {
   const [yearFilter, setYearFilter] = useState('')
   const [payingId, setPayingId] = useState<string | null>(null)
   const [revertingId, setRevertingId] = useState<string | null>(null)
+  const [refundingId, setRefundingId] = useState<string | null>(null)
+  const [refundModal, setRefundModal] = useState<{ open: boolean; quotaId: string; label: string } | null>(null)
+  const [refundNote, setRefundNote] = useState('')
+  const [downloadingStatement, setDownloadingStatement] = useState<string | null>(null)
   const [createModal, setCreateModal] = useState(false)
   const [bulkModal, setBulkModal] = useState(false)
   const [members, setMembers] = useState<any[]>([])
@@ -570,6 +590,45 @@ function QuotasPanel({ clubId }: { clubId: string }) {
     else { const d = await res.json(); toast.error(d.error ?? 'Error') }
   }
 
+  const refundQuota = async () => {
+    if (!refundModal) return
+    setRefundingId(refundModal.quotaId)
+    const res = await fetch(`/api/clubs/${clubId}/accounting/quotas/${refundModal.quotaId}/refund`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note: refundNote || undefined }),
+    })
+    setRefundingId(null)
+    if (res.ok) {
+      toast.success('Devolución registrada — ajuste contabilizado')
+      setRefundModal(null)
+      setRefundNote('')
+      load()
+    } else {
+      const d = await res.json()
+      toast.error(d.error ?? 'Error al procesar la devolución')
+    }
+  }
+
+  const downloadStatement = async (membershipId: string, memberName: string) => {
+    setDownloadingStatement(membershipId)
+    const year = yearFilter || new Date().getFullYear().toString()
+    const res = await fetch(`/api/clubs/${clubId}/accounting/statement?membershipId=${membershipId}&year=${year}`)
+    if (res.ok) {
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `estado-cuentas-${memberName.replace(/\s+/g, '-').toLowerCase()}-${year}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } else {
+      const d = await res.json().catch(() => ({}))
+      toast.error(d.error ?? 'Error al generar el estado de cuentas')
+    }
+    setDownloadingStatement(null)
+  }
+
   const createQuota = async () => {
     if (!form.membershipId || !form.amount) return toast.error('Completa todos los campos')
     const res = await fetch(`/api/clubs/${clubId}/accounting/quotas`, {
@@ -610,6 +669,7 @@ function QuotasPanel({ clubId }: { clubId: string }) {
             <option value="PENDING">Pendientes</option>
             <option value="PAID">Pagadas</option>
             <option value="OVERDUE">Vencidas</option>
+            <option value="REFUNDED">Devueltas</option>
           </select>
           <select value={yearFilter} onChange={(e) => { setYearFilter(e.target.value); setPage(1) }}
             className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white text-gray-600">
@@ -648,15 +708,37 @@ function QuotasPanel({ clubId }: { clubId: string }) {
                   <td className="py-3 font-semibold">{fmtCurrency(q.amount)}</td>
                   <td className="py-3"><QuotaStatusBadge status={q.status} /></td>
                   <td className="py-3 text-right">
-                    <div className="flex justify-end gap-1">
-                      {q.status !== 'PAID' && (
+                    <div className="flex justify-end gap-1 flex-wrap">
+                      {q.status !== 'PAID' && q.status !== 'REFUNDED' && (
                         <Button size="sm" disabled={payingId === q.id} onClick={() => markPaid(q.id)}>
                           <Check className="h-3 w-3" /> {payingId === q.id ? 'Procesando...' : 'Marcar pagada'}
                         </Button>
                       )}
                       {q.status === 'PAID' && (
-                        <Button size="sm" variant="outline" disabled={revertingId === q.id} onClick={() => revertQuota(q.id)}>
-                          <RotateCcw className="h-3 w-3" /> {revertingId === q.id ? 'Revirtiendo...' : 'Revertir'}
+                        <>
+                          <Button size="sm" variant="outline" disabled={revertingId === q.id} onClick={() => revertQuota(q.id)}>
+                            <RotateCcw className="h-3 w-3" /> {revertingId === q.id ? '...' : 'Revertir'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={refundingId === q.id}
+                            onClick={() => { setRefundModal({ open: true, quotaId: q.id, label: `Cuota ${q.year} — ${q.membership?.user?.name}` }); setRefundNote('') }}
+                            className="text-red-600 hover:bg-red-50 border-red-200"
+                          >
+                            <RotateCcw className="h-3 w-3" /> Devolver
+                          </Button>
+                        </>
+                      )}
+                      {q.status === 'PAID' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={downloadingStatement === q.membership?.id}
+                          onClick={() => downloadStatement(q.membership?.id, q.membership?.user?.name ?? 'socio')}
+                          title="Descargar Estado de Cuentas PDF"
+                        >
+                          <Download className="h-3 w-3" />
                         </Button>
                       )}
                     </div>
@@ -671,6 +753,29 @@ function QuotasPanel({ clubId }: { clubId: string }) {
           {data && <Pagination page={data.page} totalPages={data.totalPages} total={data.total} pageSize={data.pageSize} onPageChange={setPage} />}
         </>
       )}
+
+      {/* Refund confirmation modal */}
+      <Modal open={refundModal?.open ?? false} onClose={() => setRefundModal(null)} title="Confirmar devolución" size="sm">
+        <div className="space-y-4">
+          <div className="p-3 bg-red-50 rounded-xl text-xs text-red-700 border border-red-100">
+            <p className="font-semibold mb-1">¿Devolver esta cuota?</p>
+            <p>{refundModal?.label}</p>
+            <p className="mt-1 text-red-600">Se creará un movimiento de ajuste (gasto) para revertir el ingreso contabilizado.</p>
+          </div>
+          <Input
+            label="Motivo / nota (opcional)"
+            value={refundNote}
+            onChange={(e) => setRefundNote(e.target.value)}
+            placeholder="Ej: Baja anticipada, error de cobro..."
+          />
+          <div className="flex gap-2 pt-2">
+            <Button className="flex-1 bg-red-600 hover:bg-red-700 text-white" onClick={refundQuota} loading={refundingId !== null}>
+              Confirmar devolución
+            </Button>
+            <Button variant="outline" className="flex-1" onClick={() => setRefundModal(null)}>Cancelar</Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Assign individual quota modal */}
       <Modal open={createModal} onClose={() => setCreateModal(false)} title="Asignar cuota a socio" size="sm">

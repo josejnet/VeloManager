@@ -20,6 +20,8 @@ const UpdateClubSchema = z.object({
   inviteLinksEnabled: z.boolean().optional(),
   defaultInviteExpiryDays: z.number().int().min(1).max(365).nullable().optional(),
   defaultInviteMaxUses: z.number().int().min(1).max(10000).nullable().optional(),
+  // Quota configuration
+  quotaGracePeriodDays: z.number().int().min(0).max(365).optional(),
 })
 
 // GET /api/clubs/[clubId]

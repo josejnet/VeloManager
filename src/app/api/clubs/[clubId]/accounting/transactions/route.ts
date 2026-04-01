@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { requireClubAccess } from '@/lib/authz'
 import { writeAudit, AUDIT } from '@/lib/audit'
 import { ok, err } from '@/lib/utils'
+import { applyRateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,6 +20,9 @@ const CreateTransactionSchema = z.object({
 // Kept for backward compatibility — delegates to BankMovement (MANUAL source).
 // Prefer /accounting/movements for new integrations.
 export async function POST(req: NextRequest, { params }: { params: { clubId: string } }) {
+  const limited = applyRateLimit(req)
+  if (limited) return limited
+
   const access = await requireClubAccess(params.clubId, 'ADMIN')
   if (!access.ok) return access.response
 
