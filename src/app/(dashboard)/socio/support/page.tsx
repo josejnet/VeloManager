@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Pagination } from '@/components/ui/Pagination'
 import { fmtRelative } from '@/lib/utils'
-import { Plus, MessageSquare, Send, ArrowLeft, ChevronRight } from 'lucide-react'
+import { Plus, MessageSquare, Send, ArrowLeft, ChevronRight, XCircle, RefreshCw, CheckCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'WAITING' | 'RESOLVED' | 'CLOSED'
@@ -93,6 +93,7 @@ export default function SocioSupportPage() {
   const [threadLoading, setThreadLoading] = useState(false)
   const [reply, setReply] = useState('')
   const [sending, setSending] = useState(false)
+  const [changingStatus, setChangingStatus] = useState(false)
   const [createModal, setCreateModal] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<TicketCategory | null>(null)
   const [form, setForm] = useState({ subject: '', description: '' })
@@ -137,6 +138,32 @@ export default function SocioSupportPage() {
       }
     } finally {
       setThreadLoading(false)
+    }
+  }
+
+  const changeStatus = async (status: TicketStatus) => {
+    if (!selectedTicket) return
+    setChangingStatus(true)
+    try {
+      const res = await fetch(`/api/tickets/${selectedTicket.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update_status', status }),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setSelectedTicket((t) => t ? { ...t, status: updated.status } : t)
+        fetchTickets()
+        toast.success(
+          status === 'CLOSED' ? 'Ticket cerrado' :
+          status === 'OPEN'   ? 'Ticket reabierto' : 'Estado actualizado'
+        )
+      } else {
+        const d = await res.json()
+        toast.error(d.error ?? 'Error al actualizar el estado')
+      }
+    } finally {
+      setChangingStatus(false)
     }
   }
 
@@ -225,6 +252,45 @@ export default function SocioSupportPage() {
                 <StatusBadge status={selectedTicket.status} />
               </div>
               <h2 className="text-sm font-semibold text-gray-900 truncate">{selectedTicket.subject}</h2>
+            </div>
+
+            {/* Status action buttons */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {selectedTicket.status === 'RESOLVED' && (
+                <Button
+                  size="sm"
+                  onClick={() => changeStatus('CLOSED')}
+                  loading={changingStatus}
+                  className="bg-green-600 hover:bg-green-700 text-white text-xs"
+                >
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  Confirmar resolución
+                </Button>
+              )}
+              {['OPEN', 'IN_PROGRESS', 'WAITING'].includes(selectedTicket.status) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => changeStatus('CLOSED')}
+                  loading={changingStatus}
+                  className="text-xs text-red-600 border-red-200 hover:bg-red-50"
+                >
+                  <XCircle className="h-3.5 w-3.5" />
+                  Cerrar ticket
+                </Button>
+              )}
+              {selectedTicket.status === 'CLOSED' && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => changeStatus('OPEN')}
+                  loading={changingStatus}
+                  className="text-xs"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Reabrir
+                </Button>
+              )}
             </div>
           </div>
         </div>
