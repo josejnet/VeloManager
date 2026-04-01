@@ -91,7 +91,7 @@ export default function SettingsPage() {
     const res = await fetch(`/api/upload/logo?clubId=${clubId}`, { method: 'POST', body: fd })
     const data = await res.json()
     if (res.ok) {
-      setForm((f) => ({ ...f, logoUrl: data.data.url }))
+      setForm((f) => ({ ...f, logoUrl: data.url }))
       setLogoFile(null)
       if (logoFileRef.current) logoFileRef.current.value = ''
       toast.success('Logo subido correctamente')
