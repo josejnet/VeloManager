@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireClubAccess } from '@/lib/authz'
 import { err } from '@/lib/utils'
@@ -36,7 +37,7 @@ export async function GET(
   const source = sp.get('source') as string | null
   const format = sp.get('format') ?? 'csv'
 
-  const where: Record<string, unknown> = { clubId: params.clubId }
+  const where: Prisma.BankMovementWhereInput = { clubId: params.clubId }
 
   if (from || to) {
     where.date = {
@@ -45,10 +46,10 @@ export async function GET(
     }
   }
   if (type) where.type = type
-  if (source) where.source = source
+  if (source) where.source = source as Prisma.EnumMovementSourceFilter
 
   const movements = await prisma.bankMovement.findMany({
-    where: where as Parameters<typeof prisma.bankMovement.findMany>[0]['where'],
+    where,
     orderBy: { date: 'asc' },
     include: {
       category: { select: { name: true } },
