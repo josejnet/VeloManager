@@ -12,7 +12,7 @@ import { fmtCurrency, fmtDate } from '@/lib/utils'
 import {
   TrendingUp, TrendingDown, Plus, FileText, Check,
   Tag, Zap, Receipt, Package, User, Wrench, RotateCcw,
-  Wallet, AlertCircle, Upload, Pencil,
+  Wallet, AlertCircle, Upload, Pencil, Download,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
