@@ -265,13 +265,12 @@ export default function SocioDashboardPage() {
   if (!data) {
     return (
       <div className="flex-1 flex items-center justify-center p-6">
-        <p className="text-sm text-gray-400">No se pudo cargar el dashboard.</p>
+        <p className="text-sm text-gray-500">No se pudo cargar el dashboard.</p>
       </div>
     )
   }
 
   const { club, membership, priorities, upcomingEvents, recentOrders, quotas, activeVotes, announcements, stats } = data
-  const colorTheme = club.colorTheme || '#1e40af'
 
   const hasPendingItems =
     priorities.pendingQuotas.length > 0 ||
@@ -284,12 +283,12 @@ export default function SocioDashboardPage() {
       {/* ── HERO CARD ─────────────────────────────────────────────────────────── */}
       <div
         className="rounded-2xl p-6 text-white"
-        style={{ background: `linear-gradient(135deg, ${colorTheme}, ${colorTheme}dd)` }}
+        style={{ background: 'linear-gradient(135deg, rgb(var(--color-primary)), rgb(var(--color-primary) / 0.82))' }}
       >
         <div className="flex items-center justify-between">
           {/* Left */}
           <div className="flex items-center gap-4">
-            <div className="h-14 w-14 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0">
+            <div className="h-14 w-14 rounded-2xl bg-white/25 flex items-center justify-center flex-shrink-0 shadow-inner">
               {club.logoUrl ? (
                 <img src={club.logoUrl} alt={club.name} className="h-10 w-10 object-contain rounded-xl" />
               ) : (
@@ -297,9 +296,14 @@ export default function SocioDashboardPage() {
               )}
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-white">{club.name}</h2>
-              {club.slogan && <p className="text-white/70 text-sm mt-0.5">{club.slogan}</p>}
-              <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-white/20 text-white/80 text-xs">
+              {/* Club name — primary, max weight */}
+              <h2 className="text-2xl font-bold text-white leading-tight">{club.name}</h2>
+              {/* Slogan — secondary hierarchy: slightly smaller, solid white for contrast */}
+              {club.slogan && (
+                <p className="text-white/90 text-sm mt-0.5 font-normal">{club.slogan}</p>
+              )}
+              {/* Sport pill — white text on semi-transparent bg */}
+              <span className="inline-block mt-1.5 px-2.5 py-0.5 rounded-full bg-white/25 text-white text-xs font-medium">
                 {club.sport}
               </span>
             </div>
@@ -307,28 +311,31 @@ export default function SocioDashboardPage() {
 
           {/* Right – quick stats (hidden on mobile) */}
           <div className="hidden md:flex items-center gap-3">
-            <div className="bg-white/10 rounded-xl px-3 py-2 text-center min-w-[80px]">
-              <Bell className="h-4 w-4 text-white/70 mx-auto mb-0.5" />
-              <p className="text-white font-semibold text-sm">{stats.unreadNotifications}</p>
-              <p className="text-white/60 text-xs">sin leer</p>
+            {/* Notifications counter */}
+            <div className="bg-white/15 border border-white/20 rounded-xl px-3 py-2 text-center min-w-[80px]">
+              <Bell className="h-4 w-4 text-white mx-auto mb-0.5" />
+              <p className="text-white font-bold text-sm leading-none">{stats.unreadNotifications}</p>
+              <p className="text-white/90 text-[11px] mt-0.5">sin leer</p>
             </div>
-            <div className="bg-white/10 rounded-xl px-3 py-2 text-center min-w-[80px]">
-              <ShoppingCart className="h-4 w-4 text-white/70 mx-auto mb-0.5" />
-              <p className="text-white font-semibold text-sm">{stats.openPurchaseWindows}</p>
-              <p className="text-white/60 text-xs">campaña(s)</p>
+            {/* Purchase windows counter */}
+            <div className="bg-white/15 border border-white/20 rounded-xl px-3 py-2 text-center min-w-[80px]">
+              <ShoppingCart className="h-4 w-4 text-white mx-auto mb-0.5" />
+              <p className="text-white font-bold text-sm leading-none">{stats.openPurchaseWindows}</p>
+              <p className="text-white/90 text-[11px] mt-0.5">campaña(s)</p>
             </div>
+            {/* Pending amount — amber tinted for urgency, solid text */}
             {stats.totalPendingAmount > 0 && (
-              <div className="bg-orange-400/30 rounded-xl px-3 py-2 text-center min-w-[80px]">
-                <Clock className="h-4 w-4 text-orange-200 mx-auto mb-0.5" />
-                <p className="text-orange-100 font-semibold text-sm">{fmtCurrency(stats.totalPendingAmount)}</p>
-                <p className="text-orange-200/70 text-xs">pendiente</p>
+              <div className="bg-amber-400/25 border border-amber-300/40 rounded-xl px-3 py-2 text-center min-w-[80px]">
+                <Clock className="h-4 w-4 text-amber-100 mx-auto mb-0.5" />
+                <p className="text-white font-bold text-sm leading-none">{fmtCurrency(stats.totalPendingAmount)}</p>
+                <p className="text-amber-100 text-[11px] mt-0.5">pendiente</p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Member since */}
-        <p className="mt-4 text-white/50 text-xs">
+        {/* Member since — use white/75 minimum to keep readability */}
+        <p className="mt-4 text-white/75 text-xs">
           Socio desde {fmtDate(membership.joinedAt)}
         </p>
       </div>
@@ -393,7 +400,7 @@ export default function SocioDashboardPage() {
               {upcomingEvents.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 gap-2">
                   <Calendar className="h-8 w-8 text-gray-200" />
-                  <p className="text-sm text-gray-400">No hay eventos programados próximamente</p>
+                  <p className="text-sm text-gray-500">No hay eventos programados próximamente</p>
                 </div>
               ) : (
                 <div className="divide-y divide-gray-50">
@@ -418,7 +425,7 @@ export default function SocioDashboardPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900 truncate">{event.title}</p>
                           {event.location && (
-                            <p className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+                            <p className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
                               <MapPin className="h-3 w-3" />
                               {event.location}
                             </p>
@@ -478,7 +485,7 @@ export default function SocioDashboardPage() {
                   >
                     <div>
                       <p className="text-sm font-medium text-gray-900">{order.windowName}</p>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-gray-500">
                         {order.itemCount} artículo(s) · {fmtDate(order.createdAt)}
                       </p>
                     </div>
@@ -515,7 +522,7 @@ export default function SocioDashboardPage() {
                       <div className="min-w-0">
                         <p className="text-sm font-bold text-gray-900">{ann.title}</p>
                         <p className="text-xs text-gray-600 line-clamp-2 mt-0.5">{ann.body}</p>
-                        <p className="text-xs text-gray-400 mt-1">{fmtDate(ann.createdAt)}</p>
+                        <p className="text-xs text-gray-500 mt-1">{fmtDate(ann.createdAt)}</p>
                       </div>
                     </div>
                   </div>
@@ -560,7 +567,7 @@ export default function SocioDashboardPage() {
                   <div key={q.id} className="flex items-center justify-between py-2.5">
                     <div>
                       <p className="text-sm font-medium text-gray-900">Cuota {q.year}</p>
-                      <p className="text-xs text-gray-400">{fmtCurrency(q.amount)}</p>
+                      <p className="text-xs text-gray-500">{fmtCurrency(q.amount)}</p>
                     </div>
                     <QuotaStatusBadge status={q.status} />
                   </div>
@@ -585,7 +592,7 @@ export default function SocioDashboardPage() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-gray-900">{vote.title}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">
+                        <p className="text-xs text-gray-500 mt-0.5">
                           {vote.totalResponses} voto(s)
                           {vote.status === 'active' && vote.endsAt && ` · Cierra ${fmtDate(vote.endsAt)}`}
                           {vote.status === 'closed' && vote.closedAt && ` · Cerrada ${fmtDate(vote.closedAt)}`}
@@ -633,7 +640,7 @@ export default function SocioDashboardPage() {
                                 <span className={`text-xs truncate ${isMyVote ? 'font-semibold text-indigo-700' : 'text-gray-600'}`}>
                                   {isMyVote && '✓ '}{opt.text}
                                 </span>
-                                <span className="text-xs text-gray-400 ml-2 flex-shrink-0">{pct}%</span>
+                                <span className="text-xs text-gray-500 ml-2 flex-shrink-0">{pct}%</span>
                               </div>
                               <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                                 <div
@@ -649,7 +656,7 @@ export default function SocioDashboardPage() {
 
                     {/* No votes yet message */}
                     {vote.totalResponses === 0 && vote.status === 'active' && !vote.hasVoted && (
-                      <p className="text-xs text-gray-400 italic">Sé el primero en votar</p>
+                      <p className="text-xs text-gray-500 italic">Sé el primero en votar</p>
                     )}
                   </div>
                 ))}
