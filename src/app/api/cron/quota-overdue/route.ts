@@ -90,16 +90,16 @@ export async function GET(req: NextRequest) {
   for (const [key, { clubId, clubName, years }] of notifyMap) {
     const userId = key.split(':')[0]
     const yearsStr = years.sort((a, b) => a - b).join(', ')
-    await createNotificationForMany(
-      [userId],
+    await createNotificationForMany([
       {
+        userId,
         clubId,
         type: 'PAYMENT_REMINDER',
         title: `Cuota vencida — ${clubName}`,
-        body: `Tu${years.length > 1 ? 's cuotas' : ' cuota'} del año ${yearsStr} ${years.length > 1 ? 'han vencido' : 'ha vencido'}. Por favor, realiza el pago a la mayor brevedad.`,
-        data: { clubId, type: 'quota_overdue', years: yearsStr },
+        message: `Tu${years.length > 1 ? 's cuotas' : ' cuota'} del año ${yearsStr} ${years.length > 1 ? 'han vencido' : 'ha vencido'}. Por favor, realiza el pago a la mayor brevedad.`,
+        metadata: { type: 'quota_overdue', years: yearsStr },
       },
-    ).catch((e) => console.error('[quota-overdue cron] notification error', e))
+    ]).catch((e) => console.error('[quota-overdue cron] notification error', e))
   }
 
   return Response.json({
