@@ -81,12 +81,14 @@ enum PaymentStatus {
   PENDING
   PAID
   CANCELLED
+  REFUNDED  // kept for DB compatibility — present in production data
 }
 
 enum QuotaStatus {
   PENDING
   PAID
   OVERDUE
+  REFUNDED  // kept for DB compatibility — present in production data
 }
 
 enum PurchaseWindowStatus {
@@ -293,6 +295,8 @@ model Club {
   // Description shown on public club page
   description  String?
   foundedYear  Int?
+  // Quota settings — kept for DB compatibility (column exists in production)
+  quotaGracePeriodDays    Int?           @default(7)
   // Access control
   visibility              ClubVisibility @default(PUBLIC)
   joinPolicy              JoinPolicy     @default(REQUEST)
