@@ -2,7 +2,6 @@ import { NextRequest } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireClubAccess } from '@/lib/authz'
-import { err } from '@/lib/utils'
 import { applyRateLimit } from '@/lib/rate-limit'
 import * as XLSX from 'xlsx'
 
