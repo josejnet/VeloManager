@@ -426,7 +426,7 @@ export async function GET(
     .replace(/[^a-z0-9]/gi, '-')
     .toLowerCase()
 
-  return new Response(buffer, {
+  return new Response(new Uint8Array(buffer), {
     headers: {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="estado-cuentas-${safeName}-${year ?? 'historico'}.pdf"`,
