@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
       {
         userId,
         clubId,
-        type: 'PAYMENT_REMINDER',
+        type: 'PAYMENT_DUE',
         title: `Cuota vencida — ${clubName}`,
         message: `Tu${years.length > 1 ? 's cuotas' : ' cuota'} del año ${yearsStr} ${years.length > 1 ? 'han vencido' : 'ha vencido'}. Por favor, realiza el pago a la mayor brevedad.`,
         metadata: { type: 'quota_overdue', years: yearsStr },

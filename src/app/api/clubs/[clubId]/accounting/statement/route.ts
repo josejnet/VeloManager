@@ -13,7 +13,6 @@ import {
   Image,
   StyleSheet,
   renderToBuffer,
-  Font,
 } from '@react-pdf/renderer'
 
 export const dynamic = 'force-dynamic'
@@ -420,7 +419,8 @@ export async function GET(
     })),
   })
 
-  const buffer = await renderToBuffer(doc as Parameters<typeof renderToBuffer>[0])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const buffer = await renderToBuffer(doc as any)
 
   const safeName = (membership.user.name ?? membership.user.email)
     .replace(/[^a-z0-9]/gi, '-')
