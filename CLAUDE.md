@@ -14,3 +14,8 @@ Como asistente de este repositorio, debes adherirte a las siguientes reglas de o
 ## 3. Calidad del Código
 - Prioriza la legibilidad y el manejo de excepciones.
 - Si encuentras código redundante o inconsistente mientras trabajas en una tarea, propón una refactorización breve para mantener la salud del proyecto.
+
+## 4. Validación Pre-Deploy
+- **Build script:** Antes de modificar `package.json` scripts (especialmente `build`), verifica cómo está configurada la base de datos en producción. Este proyecto usa `prisma db push` (no `prisma migrate`) porque la DB de producción fue inicializada con `db push`. Cambiar a `prisma migrate deploy` causa error `P3005` si la DB no tiene baseline de migraciones.
+- **Variables de entorno:** Antes de cambiar configuración que dependa de env vars (origins, URLs, secrets), verifica si la variable existe en producción (Vercel) o solo en `.env.local`.
+- **Compatibilidad con entorno Vercel:** Cambios en `next.config.js`, `vercel.json` o scripts de build deben validarse contra el entorno de producción (dominio real, región, Node version).
