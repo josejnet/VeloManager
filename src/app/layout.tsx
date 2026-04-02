@@ -5,7 +5,8 @@ import { SessionProvider } from '@/components/providers/SessionProvider'
 import { SWRConfigProvider } from '@/components/providers/SWRConfigProvider'
 import './globals.css'
 
-const inter = Inter({ subsets: ['latin'], display: 'swap', preload: false })
+// preload:false eliminado — la fuente se pre-carga correctamente para evitar FOUT
+const inter = Inter({ subsets: ['latin'], display: 'swap' })
 
 export const metadata: Metadata = {
   title: 'Clube — Gestión de Clubes Deportivos',

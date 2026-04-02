@@ -1,6 +1,4 @@
-import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
-import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getThemeVars, themeVarsToStyle } from '@/lib/themes'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -8,6 +6,7 @@ import { DashboardProvider } from '@/providers/DashboardProvider'
 import type { DashboardContextValue } from '@/providers/DashboardProvider'
 import { ClubProvider } from '@/context/ClubContext'
 import type { ClubData } from '@/context/ClubContext'
+import { getCachedSession, getCachedUserRole, getCachedMembership } from '@/lib/session'
 
 interface ClubLayoutProps {
   children: React.ReactNode
@@ -17,13 +16,13 @@ interface ClubLayoutProps {
 export default async function ClubLayout({ children, params }: ClubLayoutProps) {
   const { clubId } = await params
 
-  const session = await getServerSession(authOptions)
+  const session = await getCachedSession()
   if (!session?.user) redirect('/login')
 
   const userId = (session.user as { id: string }).id
 
-  // Always query DB for platform role — never trust JWT
-  const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { platformRole: true } })
+  // getCachedUserRole deduplicates across layouts — at most one DB query per request
+  const dbUser = await getCachedUserRole(userId)
   const platformRole = dbUser?.platformRole ?? 'USER'
 
   let club = null
@@ -31,10 +30,8 @@ export default async function ClubLayout({ children, params }: ClubLayoutProps) 
   let membershipId = ''
 
   if (platformRole !== 'SUPER_ADMIN') {
-    const membership = await prisma.clubMembership.findFirst({
-      where: { userId, clubId, status: 'APPROVED' },
-      include: { club: true },
-    })
+    // getCachedMembership deduplicates — AdminGuard and pages reuse this result
+    const membership = await getCachedMembership(userId, clubId)
 
     if (!membership) {
       // User is not a member of this club — redirect to their first available club
