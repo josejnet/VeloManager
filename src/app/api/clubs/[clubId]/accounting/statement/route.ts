@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { type MovementSource } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireClubAccess } from '@/lib/authz'
 import { err } from '@/lib/utils'
@@ -371,7 +372,7 @@ export async function GET(
         { source: 'FEE', sourceId: { in: quotaIds } },
         { source: 'ADJUSTMENT', sourceId: { in: quotaIds.map((id) => `refund:quota:${id}`) } },
         ...(dateFrom && dateTo
-          ? [{ source: { in: ['MANUAL', 'INVOICE'] as const }, date: { gte: dateFrom, lte: dateTo } }]
+          ? [{ source: { in: ['MANUAL', 'INVOICE'] as MovementSource[] }, date: { gte: dateFrom, lte: dateTo } }]
           : []),
       ],
     },
@@ -379,16 +380,8 @@ export async function GET(
     include: { category: { select: { name: true } } },
   })
 
-  // Compute opening balance = all movements before dateFrom
-  let openingBalance = 0
-  if (dateFrom) {
-    const before = await prisma.bankMovement.aggregate({
-      where: { clubId: params.clubId, date: { lt: dateFrom } },
-      _sum: { amount: true },
-    })
-    // This is club-level balance; for member statement we show 0 as opening
-    openingBalance = 0
-  }
+  // Member statement shows 0 as opening balance (member-scoped, not club-level)
+  const openingBalance = 0
 
   const incomeSum = movements
     .filter((m) => m.type === 'INCOME')
